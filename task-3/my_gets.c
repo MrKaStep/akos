@@ -50,13 +50,14 @@ int read_string(char** str, FILE* f)
                 continue;
             }
             perror("read_string: ");
-            return -1;
+            *str = s;
+            return 0;
         }
         if(rd == 0)
         {
             s[sz] = 0;
             *str = s;
-            return 0;
+            return sz;
         }
         if(rd != sizeof(char))
         {
@@ -83,6 +84,7 @@ int main(int argc, const char** argv)
     char* buf;
     while(read_string(&buf, stdin))
     {
+        printf("%s\n", buf);
         s += 1;
     }
     if(err)
