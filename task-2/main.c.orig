@@ -18,11 +18,6 @@
 #define E_BADMD  1004
 #define E_ACCES  1005
 
-int e_exit(int error)
-{
-    return error;
-}
-
 
 #define USE_STAT  256
 #define USE_LSTAT 257
@@ -40,10 +35,27 @@ int is_dir(const char* path, int mode)
         break;
     default:
         return E_BADMD;
-
     }
     return (int)S_ISDIR(st.st_mode);
 }
+
+int is_link(const char* path, int mode)
+{
+    struct stat st;
+    switch(mode)
+    {
+    case USE_STAT:
+        stat(path, &st);
+        break;
+    case USE_LSTAT:
+        lstat(path, &st);
+        break;
+    default:
+        return E_BADMD;
+    }
+    return (int)S_ISLNK(st.st_mode);
+}
+
 
 int copy(const char* source, const char* dest);
 
@@ -142,16 +154,19 @@ int copy_file(const char* source, const char* dest)
 int copy_link(const char* source, const char* dest)
 {
     char* path = malloc(PATH_MAX * sizeof(char));
-    if(readlink(source, path, PATH_MAX))
+    int t;
+    if(readlink(source, path, PATH_MAX), t = errno)
     {
+        printf("read %d\n", t);
         if(errno == EACCES)
             return E_ACCES;
         if(errno == ENOTDIR)
             return E_NOTDIR;
         return E_UNKNWN;
     }
-    if(link(path, dest))
+    if(symlink(path, dest))
     {
+        printf("sym %d\n", errno);
         if(errno == EACCES)
             return E_ACCES;
         if(errno == ENOTDIR)
@@ -164,11 +179,16 @@ int copy_link(const char* source, const char* dest)
 
 int copy(const char* source, const char* dest)
 {
+    
     return 0;
 }
 
-int print_err(int err) {
-    switch(err){
+int print_err(int err)
+{
+    switch(err)
+    {
+    case 0:
+        return 0;
     case E_NOARG:
         fputs("Not enough arguments", stderr);
         break;
@@ -184,8 +204,11 @@ int print_err(int err) {
     case E_ACCES:
         fputs("Permission denied", stderr);
         break;
-    default:
+    case E_UNKNWN:
         fputs("Unknown error", stderr);
+        break;
+    default:
+        fputs("Fucking unknown error", stderr);
         break;
     }
     return err;
