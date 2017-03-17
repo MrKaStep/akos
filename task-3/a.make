@@ -11,4 +11,4 @@ CUR_DIR = $(shell pwd)
 %.form: %.c
 	astyle --style=ansi $(CUR_DIR)/$<
 
-format: main.form
+format: my_gets.form
