@@ -4,7 +4,7 @@ all: prog format
 	gcc -std=c89 -Wall -ansi -pedantic -c $<
 	astyle --style=ansi $(CUR_DIR)/$<
 
-prog: editor.o
+prog: main.o
 	gcc -o editor $^
 
 CUR_DIR = $(shell pwd)
@@ -12,4 +12,7 @@ CUR_DIR = $(shell pwd)
 %.form: %.c
 	astyle --style=ansi $(CUR_DIR)/$<
 
-format: editor.form
+format: main.form
+
+clean:
+	rm -f *.c.orig *.o editor
