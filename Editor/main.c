@@ -17,6 +17,8 @@
 #define E_MALLOC 2
 #define E_LNRNG  3
 #define E_C_WRNG 4
+#define E_NOARG  5
+#define E_BADSYM 6
 
 #define C_SET_T    101
 #define C_SET_N    102
@@ -37,7 +39,7 @@
 #define C_SET_NM   117
 #define C_HELP     118
 
-#define MAXWORD 11
+#define MAXWORD 16
 
 typedef unsigned int ui32;
 
@@ -121,7 +123,7 @@ int _z_function(size_t **z, const wchar_t *str1, size_t len1, const wchar_t *str
     return 0;
 }
 
-size_t _expandarr(void **s, size_t len, size_t item)
+size_t _expand_array(void **s, size_t len, size_t item)
 {
     size_t add = (len > 0 ? len : 1);
     void *ans;
@@ -158,7 +160,7 @@ int _refine_line(line *l)
         {
             if (segm == buf - 1)
             {
-                if ((buf = _expandarr((void **)&arr, buf, sizeof(size_t))) - 1 == segm)
+                if ((buf = _expand_array((void **)&arr, buf, sizeof(size_t))) - 1 == segm)
                     return E_MALLOC;
             }
             arr[segm] = i + 1;
@@ -284,7 +286,7 @@ int insert_symbol(line *l, size_t pos, wchar_t symb)
         pos = 0;
     if (l->len == l->buf - 1)
     {
-        if ((l->buf = _expandarr((void **)&(l->s), l->buf, sizeof(wchar_t))) - 1 == l->len)
+        if ((l->buf = _expand_array((void **)&(l->s), l->buf, sizeof(wchar_t))) - 1 == l->len)
             return E_MALLOC;
     }
     ++l->len;
@@ -456,6 +458,87 @@ int get_word(wchar_t* s, char* eoln)
     return 0;
 }
 
+int get_quoted_str(wchar_t** s)
+{
+    wchar_t c, *S;
+    size_t buf, len;
+    while(iswspace(c = fgetwc(stdin)) && c != L'\n');
+    if(c != L'\"')
+        return E_NOARG;
+    *s = malloc(16 * sizeof(wchar_t));
+    if(*s == NULL)
+        return E_MALLOC;
+    S = *s;
+    buf = 16;
+    len = 0;
+    while((c = fgetwc(stdin)) != L'\"' && c != L'\n')
+    {
+        if(len == buf - 1)
+        {
+            buf = _expand_array((void**)s, buf, sizeof(wchar_t));
+            if(len == buf - 1)
+            {
+                free(S);
+                return E_MALLOC;
+            }
+        }
+        if(c == L'\\')
+        {
+            c = fgetwc(stdin);
+            if(iswspace(c))
+                break;
+            switch(c)
+            {
+            case 'n':
+                c = '\n';
+                break;
+            case 't':
+                c = '\t';
+                break;
+            case 'r':
+                c = '\r';
+                break;
+            case '\\':
+                c = '\\';
+                break;
+            case '\"':
+                c = '\"';
+                break;
+            default:
+                return E_BADSYM;
+            }
+        }
+        S[len++] = c;
+    }
+    if(c == L'\n')
+    {
+        free(S);
+        return E_NOARG;
+    }
+    S[len] = L'\0';
+    return 0;
+}
+
+int get_triple_quoted_str(wchar_t** s)
+{
+    wchar_t c;
+    int buf, len;
+    while(iswspace(c = fgetwc(stdin)) && c != L'\n');
+    if(c != L'\"');
+    return E_NOARG;
+}
+
+int get_int(int* a)
+{
+    wchar_t c;
+    while(iswspace(c = fgetwc(stdin)) && c != L'\n');
+    if(!iswdigit(c))
+        return E_NOARG;
+    ungetwc(c, stdin);
+    wscanf(L"%d", a);
+    return 0;
+}
+
 int get_command()
 {
     wchar_t *w1, *w2;
@@ -551,16 +634,11 @@ int get_command()
     return ret;
 }
 
-
-
 int main(int argc, const char *argv[])
 {
-    int a, b;
-    int c = wscanf(L"%d%d\n", &a, &b);
-    int t = get_command();
-    if(t == C_EXIT)
-        fputws(L"Bye!\n", stdout);
-    if(t == C_DELETE_R)
-        fputws(L"del_r\n", stdout);
+    wchar_t* s;
+    if(get_quoted_str(&s) == E_NOARG)
+        fputws(L"FUCK", stdout);
+    wprintf(L"%ls\n", s);
     return 0;
 }
