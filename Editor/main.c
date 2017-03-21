@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <wchar.h>
+#include <locale.h>
 #include <errno.h>
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -15,6 +16,9 @@
 #define E_STRRNG 1
 #define E_MALLOC 2
 #define E_LNRNG  3
+#define E_TOOLNG 4
+
+#define MAXLEN 509
 
 typedef unsigned int ui32;
 
@@ -54,7 +58,6 @@ int __line_init(line *l)
 
 int __line_init_str(line *l, const wchar_t* s, int len)
 {
-    wprintf(L"%d\n", len);
     size_t buf = pw2(len + 1);
     l->s = malloc(buf * sizeof(wchar_t));
     if(l->s == NULL)
@@ -71,6 +74,39 @@ void __line_destroy(line *l)
 {
     free(l->s);
     free(l);
+}
+
+int _z_function(size_t** z, const wchar_t* str1, size_t len1, const wchar_t* str2, size_t len2)
+{
+    size_t l = 0, r = 0, i;
+    size_t len = len1 + len2 + 1;
+    size_t* Z;
+    *z = malloc((len1 + len2 + 1) * sizeof(size_t));
+    if(*z == NULL)
+        return E_MALLOC;
+    Z = *z;
+    Z[0] = len;
+    for(i = 0; i < len; ++i)
+    {
+        Z[i] = 0;
+        if(r > i)
+        {
+            Z[i] = MIN(r - i, Z[i - l]);
+        }
+        while(i + Z[i] < len &&
+                (i + Z[i] < len1 ?
+                 str1[i + Z[i]] :
+                 i + Z[i] > len1 ?
+                 str2[i + Z[i] - len1 - 1] : L'0')
+                == (Z[i] < len1 ?
+                    str1[Z[i]] :
+                    Z[i] > len1 ?
+                    str2[Z[i] - len1 - 1] : L'0'))
+            ++Z[i];
+        if(i + Z[i] > r)
+            l = i, r = i + Z[i];
+    }
+    return 0;
 }
 
 size_t _expandarr(void**s, size_t len, size_t item)
@@ -205,10 +241,10 @@ int edit_string(line *begin, line* end, size_t index, size_t pos, wchar_t symb)
 
 int insert_symbol(line *begin, line* end, size_t index, size_t pos, wchar_t symb)
 {
+    ssize_t i;
     line* l = _find_line(begin, end, index);
     if(l == NULL)
         return E_LNRNG;
-    ssize_t i;
     if(pos > l->len)
         pos = l->len;
     if(pos < 0)
@@ -225,9 +261,63 @@ int insert_symbol(line *begin, line* end, size_t index, size_t pos, wchar_t symb
     return 0;
 }
 
-int replace_substring(line* l, const wchar_t* sample, const wchar_t* repl)
+int replace_substring(line* begin, line* end, size_t index, const wchar_t* sample, const wchar_t* repl)
 {
-    /*TODO*/
+    line* l;
+    size_t* z;
+    size_t slen = wcslen(sample), rlen = wcslen(repl);
+    size_t nlen, nbuf;
+    wchar_t* buf;
+    size_t subst = 0;
+    size_t i, wi;
+    l = _find_line(begin, end, index);
+    if(l == NULL)
+        return E_LNRNG;
+    wprintf(L"%ls\n", l->s);
+    _z_function(&z, sample, slen, l->s, l->len);
+    for(i = 0; i < rlen;)
+    {
+        if(z[i + slen + 1] == slen)
+        {
+            ++subst;
+            i += slen;
+        }
+        else
+        {
+            ++i;
+        }
+    }
+    nlen = l->len - subst * slen + subst * rlen;
+    if(nlen > MAXLEN)
+    {
+        return E_TOOLNG;
+    }
+    nbuf = pw2(nlen);
+    buf = malloc(nbuf * sizeof(wchar_t));
+    if(buf == NULL)
+        return E_MALLOC;
+    i = 0;
+    wi = 0;
+    for(i = 0; i < l->len;)
+    {
+        if(z[i + slen + 1] == slen)
+        {
+            memcpy(buf + wi, repl, rlen * sizeof(wchar_t));
+            wi += rlen;
+            i += slen;
+        }
+        else
+        {
+            buf[wi] = l->s[i];
+            ++i;
+            ++wi;
+        }
+    }
+    free(l->s);
+    l->s = buf;
+    l->buf = nbuf;
+    l->len = nlen;
+    return 0;
 }
 
 int delete_range(line* begin, line* end, size_t first, size_t last)
@@ -322,24 +412,20 @@ void print(line* begin, line* end)
 
 int main(int argc, const char *argv[])
 {
+    setlocale(LC_ALL, "ru_RU.utf8");
     line* begin = malloc(sizeof(line));
     line* end = malloc(sizeof(line));
     line* c = malloc(sizeof(line));
     fflush(stdout);
-    __line_init_str(c,L"a", 1);
+    __line_init_str(c,L"абацаба", 7);
     begin->next = c;
     c->prev = begin;
     c->next = end;
     end->prev = c;
-    int i;
-    for(i = 0; i < 10; ++i)
-    {
-        print(begin, end);
-        insert_symbol(begin, end, 1, 0, L'a' + i + 1);
-        edit_string(begin, end, 1, 0, L'a');
-    }
+    replace_substring(begin, end, 1, L"аба", L"азаз");
+    print(begin, end);
     free(begin);
     free(end);
-
+    
     return 0;
 }
