@@ -12,45 +12,51 @@
 #include <locale.h>
 #include <errno.h>
 
+#include <linux/limits.h>
+
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
-#define E_STRRNG 1
-#define E_MALLOC 2
-#define E_LNRNG  3
-#define E_C_WRNG 4
-#define E_NOARG  5
-#define E_BADSYM 6
+#define E_MALLOC 1
+#define E_IOFAIL 2
+#define E_STRRNG 3
+#define E_LNRNG  4
+#define E_C_WRNG 5
+#define E_NOARG  6
 #define E_NARROW 7
-#define E_IOFAIL 8
+#define E_NOFILE 8
 
-#define C_SET_T    101
-#define C_SET_N    102
-#define C_PRINT_P  103
-#define C_PRINT_R  104
-#define C_SET_W    105
-#define C_INSERT_A 106
-#define C_EDIT_S   107
-#define C_INSERT_S 108
-#define C_REPL_S   109
-#define C_DELETE_R 110
-#define C_DELETE_B 111
-#define C_EXIT     112
-#define C_EXIT_F   113
-#define C_READ     114
-#define C_OPEN     115
-#define C_WRITE    116
-#define C_SET_NM   117
-#define C_HELP     118
+#define C_SET_T    101  /*set tabwidth*/
+#define C_SET_N    102  /*set numbers*/
+#define C_PRINT_P  103  /*print pages*/
+#define C_PRINT_R  104  /*print range*/
+#define C_SET_W    105  /*set wrap*/
+#define C_INSERT_A 106  /*insert after*/
+#define C_EDIT_S   107  /*edit string*/
+#define C_INSERT_S 108  /*insert symbol*/
+#define C_REPL_S   109  /*replace substring*/
+#define C_DELETE_R 110  /*delete range*/
+#define C_DELETE_B 111  /*delete braces*/
+#define C_EXIT     112  /*exit*/
+#define C_EXIT_F   113  /*exit force*/
+#define C_READ     114  /*read*/
+#define C_OPEN     115  /*open*/
+#define C_WRITE    116  /*write*/
+#define C_SET_NM   117  /*set name*/
+#define C_HELP     118  /*help*/
 
 #define M_WRAP 1
 #define M_NUM  2
+#define M_TAB  4
 
 #define B_ANY   0
 #define B_LEFT  1
 #define B_RIGHT 2
 #define B_SPACE 3
 #define B_Q     4
+
+#define M_INSERT 1
+#define M_EDIT   2
 
 #define RESET   "\033[0m"
 #define RED     "\033[1;31m"
@@ -63,11 +69,15 @@
 
 #define MAXWORD 16
 
+#define FUCK wprintf(L"FUCK\n");
+
 typedef unsigned int ui32;
 
 struct lines;
 
 typedef struct lines line;
+
+size_t tab_width = 8;
 
 size_t pw2(size_t a)
 {
@@ -169,7 +179,7 @@ int _resize_line(line *l)
     return 0;
 }
 
-int _refine_line(line *l)
+int _refine_line(line *l, size_t* total)
 {
     size_t segm = 1, buf = 2;
     size_t *arr = malloc(2 * sizeof(size_t));
@@ -189,6 +199,7 @@ int _refine_line(line *l)
             ++segm;
         }
     }
+    *total = segm;
     arr[segm] = l->len + 1;
     start = malloc(sizeof(line));
     start->next = NULL;
@@ -257,14 +268,13 @@ line* _find_line(line *begin, line *end, size_t index)
         l = l->next;
         ++i;
     }
-    if (l == end)
-        return NULL;
     return l;
 }
 
-int _print_line(line* l, int *complete, char mode, size_t width, FILE* stream,...)
+int _print_line(line* l, char mode, size_t width, size_t offset, FILE* stream,...)
 {
     wchar_t space[10], num[10];
+    size_t add = 0;
     va_list args;
     va_start(args, stream);
     if(mode & M_NUM)
@@ -300,36 +310,172 @@ int _print_line(line* l, int *complete, char mode, size_t width, FILE* stream,..
     if(mode & M_WRAP)
     {
         size_t* height;
-        size_t cur = 0;
+        size_t cur = offset;
+        size_t* complete = va_arg(args, size_t*);
         height = va_arg(args, size_t*);
+        if(offset >= l->len)
+        {
+            fwprintf(stream, L"%s%ls%s\n", GREEN, num, RESET);
+            --*height;
+        }
         while(*height > 0 && cur < l->len)
         {
             size_t i;
-            fwprintf(stream, L"%s%ls%s", GREEN, cur == 0 ? num : space, RESET);
-            for(i = cur; i < MIN(l->len, cur + width); ++i)
-                if(fputwc(l->s[i], stream) == WEOF)
+            fwprintf(stream, L"%s%ls%s", GREEN, cur == offset ? num : space, RESET);
+            for(i = cur; i + add < MIN(l->len, cur + width); ++i)
+                if((mode & M_TAB) && l->s[i] == '\t')
+                {
+                    size_t j;
+                    for(j = 0; j < tab_width && i + add < MIN(l->len + add, cur + width); ++j, ++add)
+                        if(fputwc(L' ', stream) == WEOF)
+                            return E_IOFAIL;
+                }
+                else if(fputwc(l->s[i], stream) == WEOF)
                     return E_IOFAIL;
+
             cur += width;
             if(fputwc(L'\n', stream) == WEOF)
                 return E_IOFAIL;
             --*height;
         }
-        /*wprintf(L"---\n%llu %llu\n---\n", cur, l->len);*/
-        *complete = (cur >= l->len);
+        *complete = (cur >= l->len ? 0 : cur);
     }
     else
     {
-        size_t offset, i;
-        offset = va_arg(args, size_t);
+        size_t i;
         fwprintf(stream, L"%s%ls%s", GREEN, num, RESET);
-        for(i = offset; i < MIN(l->len, offset + width); ++i)
-            if(fputwc(l->s[i], stream) == WEOF)
+        for(i = offset; i + add < MIN(l->len + add, offset + width); ++i)
+            if((mode & M_TAB) && l->s[i] == '\t')
+            {
+                size_t j;
+                for(j = 0; j < tab_width && i + add < MIN(l->len + add, offset + width); ++j, ++add)
+                    if(fputwc(L' ', stream) == WEOF)
+                        return E_IOFAIL;
+            }
+            else if(fputwc(l->s[i], stream) == WEOF)
                 return E_IOFAIL;
         if(fputwc(L'\n', stream) == WEOF)
             return E_IOFAIL;
-        *complete = 1;
     }
     va_end(args);
+    return 0;
+}
+
+int _replace_substring(line *l, const wchar_t *sample, const wchar_t *repl, size_t* total)
+{
+    size_t *z;
+    size_t slen = wcslen(sample), rlen = wcslen(repl);
+    size_t nlen, nbuf;
+    wchar_t *buf;
+    size_t subst = 0;
+    size_t i, wi;
+    int err;
+    if(slen == 0)
+        return E_NOARG;
+    if(wcscmp(sample, L"^") == 0 || wcscmp(sample, L"$") == 0)
+    {
+        nbuf = pw2(l->len + rlen);
+        nlen = l->len + rlen;
+        buf = malloc(pw2(l->len + rlen + 1) * sizeof(wchar_t));
+        if(buf == NULL)
+            return E_MALLOC;
+        if(sample[0] == L'^')
+        {
+            memcpy(buf, repl, rlen * sizeof(wchar_t));
+            memcpy(buf + rlen, l->s, l->len * sizeof(wchar_t));
+        }
+        else
+        {
+            memcpy(buf, l->s, l->len * sizeof(wchar_t));
+            memcpy(buf + l->len, repl, rlen * sizeof(wchar_t));
+        }
+        free(l->s);
+        l->s = buf;
+        l->buf = nbuf;
+        l->len = nlen;
+        if((err = _refine_line(l, total)))
+            return err;
+    }
+
+
+    _z_function(&z, sample, slen, l->s, l->len);
+    for (i = 0; i < rlen;)
+    {
+        if (z[i + slen + 1] == slen)
+        {
+            ++subst;
+            i += slen;
+        }
+        else
+        {
+            ++i;
+        }
+    }
+    nlen = l->len - subst * slen + subst * rlen;
+    nbuf = pw2(nlen + 1);
+    buf = malloc(nbuf * sizeof(wchar_t));
+    if (buf == NULL)
+        return E_MALLOC;
+    i = 0;
+    wi = 0;
+    for (i = 0; i < l->len;)
+    {
+        if (z[i + slen + 1] == slen)
+        {
+            memcpy(buf + wi, repl, rlen * sizeof(wchar_t));
+            wi += rlen;
+            i += slen;
+        }
+        else
+        {
+            buf[wi] = l->s[i];
+            ++i;
+            ++wi;
+        }
+    }
+    free(l->s);
+    l->s = buf;
+    l->buf = nbuf;
+    l->len = nlen;
+    if((err = _refine_line(l, total)))
+        return err;
+    return 0;
+}
+
+
+int _get_sentence(wchar_t** _buf)
+{
+    char quotes_flag = 0;
+    char quotes = 0;
+    wchar_t *s;
+    wint_t c;
+    size_t len = 0, buf = 16;
+    s = malloc(16 * sizeof(wchar_t));
+    if(s == NULL)
+        return E_MALLOC;
+    while((c = fgetwc(stdin)) != WEOF && (c != L'\n' || quotes_flag))
+    {
+        if(len == buf)
+        {
+            buf = _expand_array((void**)&s, buf, sizeof(wchar_t));
+            if(buf == len)
+            {
+                free(s);
+                return E_MALLOC;
+            }
+        }
+        s[len++] = c;
+        if(c == L'\"')
+        {
+            if(++quotes == 3)
+                quotes_flag ^= 1;
+            quotes %= 3;
+        }
+        else
+            quotes = 0;
+    }
+    s[len] = 0;
+    *_buf = s;
     return 0;
 }
 
@@ -353,7 +499,7 @@ wchar_t spec_symb(wchar_t symb)
     }
 }
 
-int insert_after(line *l, const wchar_t *s)
+int insert_after(line *l, const wchar_t *s, size_t *total)
 {
     line *t;
     size_t len;
@@ -376,7 +522,7 @@ int insert_after(line *l, const wchar_t *s)
     t->next = l->next;
     t->prev->next = t;
     t->next->prev = t;
-    _refine_line(t);
+    _refine_line(t, total);
     return 0;
 }
 
@@ -409,68 +555,19 @@ int insert_symbol(line *l, size_t pos, wchar_t symb)
     return 0;
 }
 
-int replace_substring(line *l, const wchar_t *sample, const wchar_t *repl)
-{
-    size_t *z;
-    size_t slen = wcslen(sample), rlen = wcslen(repl);
-    size_t nlen, nbuf;
-    wchar_t *buf;
-    size_t subst = 0;
-    size_t i, wi;
-    _z_function(&z, sample, slen, l->s, l->len);
-    for (i = 0; i < rlen;)
-    {
-        if (z[i + slen + 1] == slen)
-        {
-            ++subst;
-            i += slen;
-        }
-        else
-        {
-            ++i;
-        }
-    }
-    nlen = l->len - subst * slen + subst * rlen;
-    nbuf = pw2(nlen);
-    buf = malloc(nbuf * sizeof(wchar_t));
-    if (buf == NULL)
-        return E_MALLOC;
-    i = 0;
-    wi = 0;
-    for (i = 0; i < l->len;)
-    {
-        if (z[i + slen + 1] == slen)
-        {
-            memcpy(buf + wi, repl, rlen * sizeof(wchar_t));
-            wi += rlen;
-            i += slen;
-        }
-        else
-        {
-            buf[wi] = l->s[i];
-            ++i;
-            ++wi;
-        }
-    }
-    free(l->s);
-    l->s = buf;
-    l->buf = nbuf;
-    l->len = nlen;
-    return 0;
-}
-
-int delete_range(line *begin, line *end, size_t first, size_t last)
+int delete_range(line *begin, line *end, size_t first, size_t last, size_t *total)
 {
     size_t i;
     line *cur = begin;
+    *total = 0;
     for (i = 0; i < first - 1 && cur != end; ++i)
         cur = cur->next;
-    for (; i < last - 1 && cur != end; ++i)
-        _delete_line(cur->next);
+    for (; i < last - 1 && cur->next != end; ++i)
+        _delete_line(cur->next), ++*total;
     return 0;
 }
 
-int delete_braces(line *begin, line *end, size_t first, size_t last)
+int delete_braces(line *begin, line *end, size_t first, size_t last, size_t *total)
 {
     size_t i = 0;
     line *cur = begin;
@@ -479,6 +576,9 @@ int delete_braces(line *begin, line *end, size_t first, size_t last)
     line *start;
 
     ui32 bal = 0;
+
+    *total = 0;
+
 
     while (i != first && cur != end)
         cur = cur->next, ++i;
@@ -515,6 +615,7 @@ int delete_braces(line *begin, line *end, size_t first, size_t last)
                     int err;
                     if ((err = _merge_lines(start, cur, pos + 1)) != 0)
                         return err;
+                    ++*total;
                     cur = start;
                     cur->len = len + rlen - pos - 1;
                     pos = act_pos = len;
@@ -531,168 +632,186 @@ int delete_braces(line *begin, line *end, size_t first, size_t last)
     if (bal != 0)
     {
         int err;
-        delete_range(begin, end, del_i + 1, last);
-        if ((err = _resize_line(start)) != 0)
+        size_t tmp;
+        if((err = delete_range(begin, end, del_i + 1, last, &tmp)))
+            return err;
+        *total += tmp;
+        if ((err = _resize_line(start)))
             return err;
     }
     return 0;
 }
 
-
-
-void print(line *begin, line *end)
+int replace_substring(line* begin, line* end, size_t first, size_t last,
+                      const wchar_t* sample, const wchar_t* repl, size_t* total)
 {
-    /*printf("start printing\n");*/
-    line *l;
-    for (l = begin->next; l != end; l = l->next)
+    int err;
+    line *l, *next;
+    size_t sum = 0, cur = first, tmp;
+    l = _find_line(begin, end, first);
+    if(l == NULL)
+        return E_LNRNG;
+    while(l != end && cur != last)
     {
-        wprintf(L"%ls\n", l->s);
+        next = l->next;
+        if((err = _replace_substring(l, sample, repl, &tmp)))
+            return err;
+        sum += tmp - 1;
+        l = next;
     }
-    wprintf(L"\n--------------------\n");
+    return 0;
 }
 
-void clr()
-{
-    wchar_t c;
-    while((c = fgetwc(stdin)) != L'\n');
-}
-
-int get_word(wchar_t* s, char* eoln)
+int get_word(wchar_t **_buf, wchar_t* s)
 {
     size_t n = 0;
-    wchar_t c;
-    *eoln = 0;
-    while(iswspace(c = fgetwc(stdin)) && c != L'\n');
-    if(!iswalpha(c))
-    {
-        *eoln = 1;
+    while(iswspace(**_buf) && **_buf != L'\n')
+        ++*_buf;
+    if(!iswalpha(**_buf))
         return E_C_WRNG;
-    }
-    s[n++] = c;
-    while(n < MAXWORD && iswalpha(s[n++] = fgetwc(stdin)));
-    if(s[n - 1] == L'\n')
-        *eoln = 1;
+    s[n++] = **_buf;
+    ++*_buf;
+    while(n < MAXWORD && iswalpha(s[n++] = **_buf))
+        ++*_buf;
     if(n == MAXWORD)
         return E_C_WRNG;
     --n;
     s[n] = L'\0';
-    clr();
     return 0;
 }
 
-int get_quoted_str(wchar_t** s)
+
+int get_quoted_string(wchar_t** _buf, wchar_t** s)
 {
-    wchar_t c;
-    size_t buf, len;
-    ;
-    while(iswspace(c = fgetwc(stdin)) && c != L'\n');
-    if(c != L'\"')
+    wchar_t *first, *last, *i;
+    size_t spec = 0, len = 0;
+    char spec_flag = 1;
+    while(iswspace(**_buf) && **_buf != L'\n')
+        ++*_buf;
+    if(**_buf != L'\"')
         return E_NOARG;
-    *s = malloc(16 * sizeof(wchar_t));
-    if(*s == NULL)
-        return E_MALLOC;
-    buf = 16;
-    len = 0;
-    while((c = fgetwc(stdin)) != L'\"' && c != L'\n')
+    ++*_buf;
+    first = *_buf;
+    while(**_buf != L'\"' && **_buf != L'\n' && **_buf != L'\0')
     {
-        if(len == buf - 1)
+        if(spec_flag && **_buf == L'\\')
         {
-            buf = _expand_array((void**)s, buf, sizeof(wchar_t));
-            if(len == buf - 1)
-            {
-                free((*s));
-                return E_MALLOC;
-            }
+            ++spec;
+            spec_flag = 0;
         }
-        if(c == L'\\')
+        else
+            spec_flag = 1;
+        ++*_buf;
+    }
+    if(**_buf == L'\n' || **_buf == L'\0')
+        return E_NOARG;
+    last = (*_buf)++;
+    *s = malloc(pw2(last - first - spec + 1) * sizeof(wchar_t));
+    if(s == NULL)
+        return E_MALLOC;
+    for(i = first; i != last; ++i)
+    {
+        wchar_t c;
+        if(*i == L'\\')
         {
-            c = spec_symb(fgetwc(stdin));
-            if(c == WEOF)
+            ++i;
+            c = spec_symb(*i);
+            if(c == L'\n' || c == L'\0')
                 continue;
         }
+        else
+            c = *i;
         (*s)[len++] = c;
     }
-    if(c == L'\n')
-    {
-        free((*s));
-        return E_NOARG;
-    }
     (*s)[len] = L'\0';
-    if(c != L'\n')
-        clr();
     return 0;
 }
 
-int get_triple_quoted_str(wchar_t** s)
+int get_triple_quoted_string(wchar_t** _buf, wchar_t** s)
 {
-    wchar_t c;
-    size_t buf, len;
-    wchar_t lst[3] = {L'\0', L'\0', L'\0'};
-    size_t cur = 0;
-    char start = 0;
-    while(iswspace(c = fgetwc(stdin)) && c != L'\n');
-    if(c != L'\"')
+    wchar_t *first, *last, *i;
+    size_t len = 0, quotes = 0, spec = 0;
+    char spec_flag = 1;
+    while(iswspace(**_buf) && **_buf != L'\n')
+        ++*_buf;
+    if(**_buf != L'\"')
         return E_NOARG;
-    c = fgetwc(stdin);
-    if(c != L'\"')
+    ++*_buf;
+    if(**_buf != L'\"')
     {
-        ungetwc(c, stdin);
-        ungetwc(L'\"', stdin);
-        return get_quoted_str(s);
+        *_buf -= 2;
+        return get_quoted_string(_buf, s);
     }
-    c = fgetwc(stdin);
-    if(c != L'\"')
+    ++*_buf;
+    if(**_buf != L'\"')
     {
         *s = malloc(sizeof(wchar_t));
         (*s)[0] = L'\0';
-        clr();
         return 0;
     }
-    *s = malloc(16 * sizeof(wchar_t));
-    if(*s == NULL)
-        return E_MALLOC;
-    buf = 16;
-    len = 0;
-    while(lst[0] != L'\"' || lst[1] != L'\"' || lst[2] != L'\"')
+    ++*_buf;
+    first = *_buf;
+    while(**_buf != L'\0' && quotes != 3)
     {
-        c = fgetwc(stdin);
-        if(len == 0 && !start && c == L'\n')
+        if(spec_flag && **_buf == L'\\')
         {
-            start = 1;
-            continue;
+            ++spec;
+            spec_flag = 0;
         }
-        if(len == buf - 1)
-        {
-            buf = _expand_array((void**)s, buf, sizeof(wchar_t));
-            if(len == buf - 1)
-            {
-                free((*s));
-                return E_MALLOC;
-            }
-        }
+        else
+            spec_flag = 1;
+        if(**_buf == L'\"')
+            ++quotes;
+        else
+            quotes = 0;
+        ++*_buf;
+    }
+    if(quotes != 3)
+        return E_NOARG;
+    last = *_buf - 3;
+    if(*first == L'\n')
+        ++first;
+    if(last != first && *(last - 1) == L'\n' && *(last - 2) != L'\\')
+        --last;
+    *s = malloc((last - first - spec + 1) * sizeof(wchar_t));
+    for(i = first; i != last; ++i)
+    {
+        wchar_t c;
+        c = *i;
         if(c == L'\\')
         {
-            c = spec_symb(fgetwc(stdin));
-            if(c == WEOF)
-                continue;
+            ++i;
+            c = spec_symb(*i);
         }
         (*s)[len++] = c;
-        lst[(++cur + 1) % 3] = c;
     }
-    len = len - 3;
     (*s)[len] = L'\0';
-    clr();
     return 0;
 }
 
-int get_int(int* a)
+int get_int(wchar_t **_buf, size_t* a)
 {
-    wchar_t c;
-    while(iswspace(c = fgetwc(stdin)) && c != L'\n');
-    if(!iswdigit(c))
+    while(iswspace(**_buf) && **_buf != L'\0')
+        ++*_buf;
+    if(!iswdigit(**_buf) || **_buf == L'\0')
         return E_NOARG;
-    ungetwc(c, stdin);
-    wscanf(L"%d", a);
+    *a = 0;
+    while(iswdigit(**_buf))
+    {
+        *a *= 10;
+        *a += (**_buf - L'0');
+        ++*_buf;
+    }
+    return 0;
+}
+
+int get_symb(wchar_t **buf, wchar_t* c)
+{
+    while(iswspace(**buf))
+        ++*buf;
+    if(**buf == L'\0')
+        return E_NOARG;
+    *c = **buf;
     return 0;
 }
 
@@ -725,7 +844,6 @@ int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream,
     size_t cur;
     line* l;
     int err;
-    int complete;
     l = _find_line(begin, end, first);
     if(l == NULL)
         return E_LNRNG;
@@ -739,12 +857,12 @@ int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream,
             while(tmp > 0)
                 tmp /= 10, ++nlen;
             for(cur = first; cur < last; ++cur, l = l->next)
-                if((err = _print_line(l, &complete, M_NUM, -1, stream, nlen, cur, 0)) != 0)
+                if((err = _print_line(l, M_NUM, -1, 0, stream, nlen, cur)))
                     return err;
         }
         else
             for(cur = first; cur < last; ++cur, l = l->next)
-                if((err = _print_line(l, &complete, 0, -1, stream, 0)) != 0)
+                if((err = _print_line(l, 0, -1, 0, stream)))
                     return err;
         return 0;
     }
@@ -759,20 +877,19 @@ int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream,
         new_term.c_lflag &= ~ICANON;
         new_term.c_cc[VMIN] = 1;
         tcsetattr(0, TCSANOW, &new_term);
-
         ioctl(1, TIOCGWINSZ, &sz);
         height = sz.ws_row - 1;
         width = sz.ws_col;
         cur = old_cur = first;
+
         while(1)
         {
-            complete = 0;
+            cur_height = height;
             fwprintf(stream, L"\n");
             cur = old_cur;
             l = _find_line(begin, end, cur);
             if(l == NULL)
             {
-                tcsetattr(0, TCSANOW, &old_term);
                 return E_LNRNG;
             }
             cur_height = height;
@@ -785,62 +902,72 @@ int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream,
                     tmp /= 10, ++nlen;
                 while(cur_height > 0)
                 {
-                    if(cur == last)
+                    if(cur >= last)
                     {
                         while(cur_height-- > 0)
                             fwprintf(stream, L"%s~%s\n", BLUE, RESET);
                         break;
                     }
-                    else if(wrap)
+                    if(wrap)
                     {
-                        if((err = _print_line(l, &complete, M_NUM | M_WRAP, width, stream, nlen, cur, &cur_height)) != 0)
+                        if((err = _print_line(l, M_NUM | M_WRAP | M_TAB, width, offset, stream, nlen, cur, &offset, &cur_height)))
                         {
                             tcsetattr(0, TCSANOW, &old_term);
                             return err;
+                        }
+                        if(offset == 0)
+                        {
+                            ++cur;
+                            l = l->next;
                         }
                     }
                     else
                     {
-                        if((err = _print_line(l, &complete, M_NUM, width, stream, nlen, cur, offset)) != 0)
+                        if((err = _print_line(l, M_NUM | M_TAB, width, offset, stream, nlen, cur)))
                         {
                             tcsetattr(0, TCSANOW, &old_term);
                             return err;
                         }
+                        ++cur;
+                        l = l->next;
                         --cur_height;
                     }
-                    ++cur;
-                    l = l->next;
                 }
             }
             else
             {
                 while(cur_height > 0)
                 {
-                    if(cur == last)
+                    if(cur >= last)
                     {
                         while(cur_height-- > 0)
                             fwprintf(stream, L"%s~%s\n", BLUE, RESET);
                         break;
                     }
-                    else if(wrap)
+                    if(wrap)
                     {
-                        if((err = _print_line(l, &complete, M_WRAP, width, stream, &cur_height)) != 0)
+                        if((err = _print_line(l, M_WRAP | M_TAB, width, offset, stream, &offset, &cur_height)))
                         {
                             tcsetattr(0, TCSANOW, &old_term);
                             return err;
+                        }
+                        if(offset == 0)
+                        {
+                            ++cur;
+                            l = l->next;
                         }
                     }
                     else
                     {
-                        if((err = _print_line(l, &complete, 0, width, stream, offset)) != 0)
+                        if((err = _print_line(l, M_TAB, width, offset, stream)))
                         {
                             tcsetattr(0, TCSANOW, &old_term);
                             return err;
                         }
+                        ++cur;
+                        l = l->next;
                         --cur_height;
                     }
-                    ++cur;
-                    l = l->next;
                 }
             }
             fwprintf(stream, L"\033[30;47m Выход: q, След. страница: SPACE");
@@ -853,19 +980,28 @@ int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream,
                 switch(get_button())
                 {
                 case B_LEFT:
+                    if(wrap)
+                        continue;
                     cur = old_cur;
                     if(offset != 0)
                         --offset;
                     ready = 1;
                     break;
                 case B_RIGHT:
-                    cur = old_cur;
+                    if(wrap)
+                        continue;
                     ++offset;
                     ready = 1;
                     break;
                 case B_SPACE:
-                    if(cur != last || !complete)
+                    if(cur < last)
                     {
+                        if(wrap)
+                        {
+                            old_cur = cur;
+                            ready = 1;
+                            break;
+                        }
                         old_cur = cur - 1;
                         offset = 0;
                         ready = 1;
@@ -885,27 +1021,19 @@ int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream,
     }
 }
 
-int get_command()
+
+int get_command(wchar_t** buf, wchar_t** cur)
 {
-    wchar_t *w1, *w2;
+    wchar_t w1[MAXWORD], w2[MAXWORD];
     int err;
     int ret = 0;
-    char eoln;
     fputws(L"editor: ", stdout);
-    w1 = malloc(MAXWORD * sizeof(wchar_t));
-    if(w1 == NULL)
-        return E_MALLOC;
-    w2 = malloc(MAXWORD * sizeof(wchar_t));
-    if(w2 == NULL)
-        return E_MALLOC;
-    if((err = get_word(w1, &eoln)) != 0)
-    {
-        free(w1);
-        free(w2);
+    _get_sentence(buf);
+    *cur = *buf;
+    if((err = get_word(cur, w1)))
         return err;
-    }
     if(wcscmp(w1, L"exit") == 0)
-        if(!eoln && get_word(w2, &eoln) == 0 && wcscmp(w1, L"force") == 0)
+        if(get_word(cur, w2) == 0 && wcscmp(w2, L"force") == 0)
             ret = C_EXIT_F;
         else
             ret = C_EXIT;
@@ -917,20 +1045,10 @@ int get_command()
         ret = C_WRITE;
     else if(wcscmp(w1, L"help") == 0)
         ret = C_HELP;
-    else if(eoln)
-        return E_C_WRNG;
     if(ret != 0)
-    {
-        free(w1);
-        free(w2);
         return ret;
-    }
-    if((err = get_word(w2, &eoln)) != 0)
-    {
-        free(w1);
-        free(w2);
+    if((err = get_word(cur, w2)) != 0)
         return err;
-    }
     if(wcscmp(w1, L"set") == 0)
         if(wcscmp(w2, L"tabwidth") == 0)
             ret = C_SET_T;
@@ -975,15 +1093,419 @@ int get_command()
             ret = E_C_WRNG;
     else
         ret = E_C_WRNG;
-    free(w1);
-    free(w2);
     return ret;
+}
+
+int c_read(line* begin, line* end, FILE* stream, size_t* total)
+{
+    while(1)
+    {
+        wchar_t* s;
+        size_t buf = 4, len = 0;
+        wint_t c;
+        int err;
+        s = malloc(4 * sizeof(wchar_t));
+        if(s == NULL)
+        {
+            fclose(stream);
+            return E_MALLOC;
+        }
+        while((c = fgetwc(stream)) != WEOF && c != L'\n')
+        {
+            if(len + 1 == buf)
+            {
+                buf = _expand_array((void**)&s, buf, sizeof(wchar_t));
+                if(len == buf)
+                {
+                    free(s);
+                    fclose(stream);
+                    return E_MALLOC;
+                }
+            }
+            s[len++] = c;
+        }
+        s[len] = L'\0';
+        err = insert_after(end->prev, s, total);
+        free(s);
+        if(err)
+        {
+            fclose(stream);
+            return err;
+        }
+        if(c == WEOF)
+            break;
+    }
+    fclose(stream);
+    return 0;
+}
+
+int c_write(line* begin, line* end, FILE* stream)
+{
+    line* cur = begin->next;
+    int err;
+    while(cur != end)
+    {
+        if((err = fwprintf(stream, L"%ls", cur->s)) == -1)
+        {
+            fclose(stream);
+            return E_IOFAIL;
+        }
+        cur = cur->next;
+    }
+    fclose(stream);
+    return 0;
+}
+
+int inv_set_tabwidth(wchar_t** cur)
+{
+    int err;
+    size_t tab;
+    if((err = get_int(cur, &tab)));
+    return err;
+    tab_width = tab;
+    return 0;
+}
+
+int inv_set_numbers(wchar_t** cur, char* num)
+{
+    int err;
+    wchar_t ans[MAXWORD];
+    if((err = get_word(cur, ans)))
+        return E_NOARG;
+    if(wcscmp(ans, L"yes") == 0)
+        *num = 1;
+    else if(wcscmp(ans, L"no") == 0)
+        *num = 0;
+    else
+        return E_NOARG;
+    return 0;
+}
+
+int inv_print_pages(wchar_t** cur,
+                    line* begin, line* end, size_t len,
+                    char num, char wrap)
+{
+    int err;
+    if((err = print_pages(begin, end, 1, len + 1, stdout, num, wrap)))
+        return err;
+    return 0;
+}
+
+int inv_print_range(wchar_t** cur,
+                    line* begin, line* end, size_t len,
+                    char num, char wrap)
+{
+    int err;
+    size_t first = 1, last = len;
+    get_int(cur, &first);
+    get_int(cur, &last);
+    ++last;
+    if((err = print_pages(begin, end, first, last, stdout, num, wrap)))
+        return err;
+    return 0;
+
+}
+
+int inv_set_wrap(wchar_t** cur, char* wrap)
+{
+    int err;
+    wchar_t ans[MAXWORD];
+    if((err = get_word(cur, ans)))
+        return E_NOARG;
+    if(wcscmp(ans, L"yes") == 0)
+        *wrap = 1;
+    else if(wcscmp(ans, L"no") == 0)
+        *wrap = 0;
+    else
+        return E_NOARG;
+    return 0;
+}
+
+int inv_insert_after(wchar_t** cur,
+                     line* begin, line* end, size_t* len)
+{
+    int err;
+    size_t total;
+    size_t ln;
+    line* l;
+    wchar_t *s = NULL;
+    if((err = get_int(cur, &ln)))
+        ln = *len;
+    if((err = get_triple_quoted_string(cur, &s)))
+        return err;
+    l = _find_line(begin, end, ln);
+    if(l == NULL)
+        return E_LNRNG;
+    insert_after(l, s, &total);
+    *len += total;
+    return 0;
+}
+
+int inv_edit_string(wchar_t** cur, line* begin, line* end, int mode)
+{
+    int err;
+    wchar_t c;
+    size_t ln, pos;
+    line* l;
+    if((err = get_int(cur, &ln)))
+        return err;
+    if((err = get_int(cur, &pos)))
+        return err;
+    --pos;
+    if((err = get_symb(cur, &c)))
+        return err;
+    l = _find_line(begin, end, ln);
+    if(l == end)
+        return E_LNRNG;
+    if((err = (mode == M_INSERT ? insert_symbol(l, pos, c) : edit_string(l, pos, c))))
+        return err;
+    return 0;
+}
+
+int inv_replace_substring(wchar_t** cur, line* begin, line* end, size_t* len)
+{
+    int err;
+    wchar_t *sample, *repl;
+    size_t total;
+    size_t first = 1, last = *len;
+    get_int(cur, &first);
+    get_int(cur, &last);
+    ++last;
+    if((err = get_quoted_string(cur, &sample)))
+        return err;
+    if((err = get_quoted_string(cur, &repl)))
+    {
+        free(sample);
+        return err;
+    }
+    if((err = replace_substring(begin, end, first, last, sample, repl, &total)))
+    {
+        free(sample);
+        free(repl);
+        return err;
+    }
+    *len += total;
+    return 0;
+}
+
+int inv_delete_range(wchar_t** cur, line* begin, line* end, size_t* len)
+{
+    int err;
+    size_t first = 1, last = *len;
+    size_t total;
+    get_int(cur, &first);
+    get_int(cur, &last);
+    ++last;
+    if((err = delete_range(begin, end, first, last, &total)))
+        return err;
+    *len -= total;
+    return 0;
+}
+
+int inv_delete_braces(wchar_t** cur, line* begin, line* end, size_t* len)
+{
+    int err;
+    size_t first = 1, last = *len;
+    size_t total;
+    get_int(cur, &first);
+    get_int(cur, &last);
+    ++last;
+    if((err = delete_braces(begin, end, first, last, &total)))
+        return err;
+    *len -= total;
+    return 0;
+}
+
+int inv_exit(line* begin, line* end, char change)
+{
+    size_t trash;
+    if(change)
+    {
+        wprintf(L"File not saved. Use %sexit force%s to exit anyway.\n", RED, RESET);
+        return 0;
+    }
+    delete_range(begin, end, 1, -1, &trash);
+    __line_destroy(begin);
+    __line_destroy(end);
+    exit(0);
+}
+
+int inv_read(wchar_t** cur, line* begin, line* end, size_t* len)
+{
+    int err;
+    wchar_t *p;
+    size_t l;
+    char* pc;
+    FILE* f;
+    if((err = get_quoted_string(cur, &p)))
+        return err;
+    l = wcstombs(NULL, p, 0);
+    pc = malloc(l + 1);
+    if(pc == NULL)
+    {
+        free(p);
+        return E_MALLOC;
+    }
+    wcstombs(pc, p, l + 1);
+    f = fopen(pc, "r");
+    if(f == NULL)
+    {
+        free(p);
+        free(pc);
+        return E_IOFAIL;
+    }
+    if((err = c_read(begin, end, f, len)))
+    {
+        free(p);
+        free(pc);
+        return err;
+    }
+    return 0;
+}
+
+int inv_open(wchar_t** cur, line* begin, line* end, size_t* len, char** path)
+{
+    int err;
+    wchar_t *p;
+    size_t l;
+    char* pc;
+    FILE* f;
+    if((err = get_quoted_string(cur, &p)))
+        return err;
+    l = wcstombs(NULL, p, 0);
+    pc = malloc(l + 1);
+    if(pc == NULL)
+    {
+        free(p);
+        return E_MALLOC;
+    }
+    wcstombs(pc, p, l + 1);
+    f = fopen(pc, "r");
+    if(f == NULL)
+    {
+        free(p);
+        free(pc);
+        return E_IOFAIL;
+    }
+    else
+    {
+        free(*path);
+        strcpy(pc, *path);
+    }
+    if((err = c_read(begin, end, f, len)))
+    {
+        free(p);
+        free(pc);
+        return err;
+    }
+    return 0;
+}
+
+int inv_write(wchar_t** cur, line* begin, line* end, char* path)
+{
+    int err;
+    wchar_t *p = NULL;
+    size_t l;
+    char* pc;
+    FILE* f;
+    if((err = get_quoted_string(cur, &p)))
+    {
+        if(path[0] == '\0')
+            return E_NOFILE;
+        pc = path;
+    }
+    else
+    {
+        l = wcstombs(NULL, p, 0);
+        pc = malloc(l + 1);
+        if(pc == NULL)
+        {
+            free(p);
+            return E_MALLOC;
+        }
+        wcstombs(pc, p, l + 1);
+    }
+    f = fopen(pc, "w");
+    if(f == NULL)
+    {
+        if(p != NULL)
+            free(p);
+        if(pc != path)
+            free(pc);
+        return E_IOFAIL;
+    }
+    if((err = c_write(begin, end, f)))
+    {
+        if(p != NULL)
+            free(p);
+        if(pc != path)
+            free(pc);
+        return err;
+    }
+    if(p != NULL)
+        free(p);
+    if(pc != path)
+        free(pc);
+    return 0;
+}
+
+int inv_set_name(wchar_t** cur, char** path)
+{
+    int err;
+    wchar_t *p;
+    size_t l;
+    if((err = get_quoted_string(cur, &p)))
+        return err;
+    free(*path);
+    l = wcstombs(NULL, p, 0);
+    *path = malloc(l + 1);
+    wcstombs(*path, p, l + 1);
+    return 0;
+}
+
+
+int printerr(int err)
+{
+    switch(err)
+    {
+    case E_STRRNG:
+        fwprintf(stderr, L"Incorrect symbol position\n");
+        break;
+    case E_MALLOC:
+        fwprintf(stderr, L"Not enough memory\n");
+        break;
+    case E_LNRNG:
+        fwprintf(stderr, L"Incorrect line number\n");
+        break;
+    case E_C_WRNG:
+        fwprintf(stderr, L"Incorrect command\n");
+        break;
+    case E_NOARG:
+        fwprintf(stderr, L"Missing or invalid arguments\n");
+        break;
+    case E_NARROW:
+        fwprintf(stderr, L"Treminal\'s width not enough\n");
+        break;
+    case E_IOFAIL:
+        fwprintf(stderr, L"Input/output error has occured\n");
+        break;
+    case E_NOFILE:
+        fwprintf(stderr, L"No file specified\n");
+        break;
+    }
+    return err;
 }
 
 int main(int argc, const char *argv[])
 {
     line *begin, *end;
-    int i;
+    char *path;
+    size_t len = 0;
+    char change = 0, wrap = 1, num = 1;
+    path = malloc(sizeof(char));
+    if(path == NULL)
+        printerr(E_MALLOC);
+    path[0] = '\0';
     setlocale(LC_ALL, "ru_RU.utf8");
     begin = malloc(sizeof(line));
     end = malloc(sizeof(line));
@@ -991,8 +1513,73 @@ int main(int argc, const char *argv[])
     __line_init(end);
     begin->next = end;
     end->prev = begin;
-    for(i = 0; i < 100; ++i)
-        insert_after(begin, L"aaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcccccccccccccccccccccccccdddddddddddddddddddddddddddddddddddeeeeeeeeeeeeeeeeeeefffffffffffffffff");
-    print_pages(begin, end, 1, 101, stdout, 1, 0);
+    while(1)
+    {
+        wchar_t *buf, *cur;
+        int cmd = get_command(&buf, &cur);
+        switch(cmd)
+        {
+        case C_SET_T:
+            printerr(inv_set_tabwidth(&cur));
+            break;
+        case C_SET_N:
+            printerr(inv_set_numbers(&cur, &num));
+            break;
+        case C_PRINT_P:
+            printerr(inv_print_pages(&cur, begin, end, len, num, wrap));
+            break;
+        case C_PRINT_R:
+            printerr(inv_print_range(&cur, begin, end, len, num, wrap));
+            break;
+        case C_SET_W:
+            printerr(inv_set_wrap(&cur, &wrap));
+            break;
+        case C_INSERT_A:
+            printerr(inv_insert_after(&cur, begin, end, &len));
+            change = 1;
+            break;
+        case C_EDIT_S:
+            printerr(inv_edit_string(&cur, begin, end, M_EDIT));
+            change = 1;
+            break;
+        case C_INSERT_S:
+            printerr(inv_edit_string(&cur, begin, end, M_INSERT));
+            change = 1;
+            break;
+        case C_REPL_S:
+            printerr(inv_replace_substring(&cur, begin, end, &len));
+            change = 1;
+            break;
+        case C_DELETE_R:
+            printerr(inv_delete_range(&cur, begin, end, &len));
+            change = 1;
+            break;
+        case C_DELETE_B:
+            printerr(inv_delete_braces(&cur, begin, end, &len));
+            change = 1;
+            break;
+        case C_EXIT:
+            printerr(inv_exit(begin, end, change));
+            break;
+        case C_EXIT_F:
+            printerr(inv_exit(begin, end, (char)0));
+            break;
+        case C_READ:
+            printerr(inv_read(&cur, begin, end, &len));
+            break;
+        case C_OPEN:
+            printerr(inv_read(&cur, begin, end, &len));
+            break;
+        case C_WRITE:
+            printerr(inv_read(&cur, begin, end, &len));
+            change = 0;
+            break;
+        case C_SET_NM:
+            printerr(inv_set_name(&cur, &path));
+            break;
+        case C_HELP:
+            break;
+        }
+    }
     return 0;
 }

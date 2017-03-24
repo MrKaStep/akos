@@ -1,4 +1,4 @@
-all: prog format
+all: format prog
 
 %.o: %.c
 	gcc -std=c89 -Wall -ansi -pedantic -c $<
