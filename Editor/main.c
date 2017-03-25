@@ -340,7 +340,7 @@ int _print_line(line* l, char mode, size_t width, size_t offset, FILE* stream,..
         {
             size_t i;
             fwprintf(stream, L"%s%ls%s", GREEN, cur == offset ? num : space, RESET);
-            for(i = cur; i + add < MIN(l->len, cur + width); ++i)
+            for(i = cur; i + add < MIN(l->len + add, cur + width); ++i)
                 if((mode & M_TAB) && l->s[i] == '\t')
                 {
                     size_t j;
@@ -520,16 +520,16 @@ wchar_t spec_symb(wchar_t symb)
 {
     switch(symb)
     {
-    case 'n':
-        return '\n';
-    case 't':
-        return '\t';
-    case 'r':
-        return '\r';
-    case '\\':
-        return '\\';
-    case '\"':
-        return '\"';
+    case L'n':
+        return L'\n';
+    case L't':
+        return L'\t';
+    case L'r':
+        return L'\r';
+    case L'\\':
+        return L'\\';
+    case L'\"':
+        return L'\"';
     default:
         return symb;
     }
@@ -752,9 +752,9 @@ int get_quoted_string(wchar_t** _buf, wchar_t** s)
         if(*i == L'\\')
         {
             ++i;
-            c = spec_symb(*i);
-            if(c == L'\n' || c == L'\0')
+            if(*i == L'\n' || *i == L'\0')
                 continue;
+            c = spec_symb(*i);
         }
         else
             c = *i;
@@ -842,22 +842,21 @@ int get_int(wchar_t **_buf, size_t* a)
     return 0;
 }
 
-int get_symb(wchar_t **buf, wchar_t* c)
+int get_symb(wchar_t **buf, wchar_t* c, char spec)
 {
     while(iswspace(**buf))
         ++*buf;
     if(**buf == L'\0')
         return E_NOARG;
-    if(**buf == '\'')
+    if(spec && **buf == '\'')
     {
         ++*buf;
-        return get_symb(buf, c);
+        return get_symb(buf, c, 1);
     }
-    if(**buf == '\\')
+    if(spec && **buf == '\\')
     {
-        int err;
         ++*buf;
-        if(get_symb(buf, c))
+        if(get_symb(buf, c, 0))
             return E_NOARG;
         *c = spec_symb(*c);
         return 0;
@@ -1249,8 +1248,8 @@ int inv_set_tabwidth(wchar_t** cur)
 {
     int err;
     size_t tab;
-    if((err = get_int(cur, &tab)));
-    return err;
+    if((err = get_int(cur, &tab)))
+        return err;
     tab_width = tab;
     return 0;
 }
@@ -1344,7 +1343,7 @@ int inv_edit_string(wchar_t** cur, line* begin, line* end, int mode)
     if((err = get_int(cur, &pos)))
         return err;
     --pos;
-    if((err = get_symb(cur, &c)))
+    if((err = get_symb(cur, &c, 1)))
         return err;
     l = _find_line(begin, end, ln);
     if(l == end)
