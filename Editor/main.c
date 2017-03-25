@@ -132,6 +132,15 @@ void __line_destroy(line *l)
     free(l);
 }
 
+wchar_t _wcscat_at(const wchar_t *str1, size_t len1, const wchar_t *str2, size_t len2, size_t pos)
+{
+    if(pos < len1)
+        return str1[pos];
+    if(pos == len1)
+        return L'\0';
+    return str2[pos - len1 - 1];
+}
+
 int _z_function(size_t **z, const wchar_t *str1, size_t len1, const wchar_t *str2, size_t len2)
 {
     size_t l = 0, r = 0, i;
@@ -150,7 +159,7 @@ int _z_function(size_t **z, const wchar_t *str1, size_t len1, const wchar_t *str
             Z[i] = MIN(r - i, Z[i - l]);
         }
         while (i + Z[i] < len &&
-                (i + Z[i] < len1 ? str1[i + Z[i]] : i + Z[i] > len1 ? str2[i + Z[i] - len1 - 1] : L'0') == (Z[i] < len1 ? str1[Z[i]] : Z[i] > len1 ? str2[Z[i] - len1 - 1] : L'0'))
+                (i + Z[i] < len1 ? str1[i + Z[i]] : i + Z[i] > len1 ? str2[i + Z[i] - len1 - 1] : L'\0') == (Z[i] < len1 ? str1[Z[i]] : Z[i] > len1 ? str2[Z[i] - len1 - 1] : L'\0'))
             ++Z[i];
         if (i + Z[i] > r)
             l = i, r = i + Z[i];
@@ -408,7 +417,8 @@ int _replace_substring(line *l, const wchar_t *sample, const wchar_t *repl, size
 
 
     _z_function(&z, sample, slen, l->s, l->len);
-    for (i = 0; i < rlen;)
+
+    for (i = 0; i < l->len;)
     {
         if (z[i + slen + 1] == slen)
         {
@@ -420,6 +430,7 @@ int _replace_substring(line *l, const wchar_t *sample, const wchar_t *repl, size
             ++i;
         }
     }
+
     nlen = l->len - subst * slen + subst * rlen;
     nbuf = pw2(nlen + 1);
     buf = malloc(nbuf * sizeof(wchar_t));
@@ -837,6 +848,20 @@ int get_symb(wchar_t **buf, wchar_t* c)
         ++*buf;
     if(**buf == L'\0')
         return E_NOARG;
+    if(**buf == '\'')
+    {
+        ++*buf;
+        return get_symb(buf, c);
+    }
+    if(**buf == '\\')
+    {
+        int err;
+        ++*buf;
+        if(get_symb(buf, c))
+            return E_NOARG;
+        *c = spec_symb(*c);
+        return 0;
+    }
     *c = **buf;
     return 0;
 }
@@ -1297,6 +1322,7 @@ int inv_insert_after(wchar_t** cur,
     wchar_t *s = NULL;
     if((err = get_int(cur, &ln)))
         ln = *len;
+    ln = MIN(ln, *len);
     if((err = get_triple_quoted_string(cur, &s)))
         return err;
     l = _find_line(begin, end, ln);
