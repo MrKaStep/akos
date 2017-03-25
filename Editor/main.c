@@ -25,6 +25,9 @@
 #define E_NOARG  6
 #define E_NARROW 7
 #define E_NOFILE 8
+#define E_COMM   9
+#define E_EMPTY  10
+#define E_EOF    11
 
 #define C_SET_T    101  /*set tabwidth*/
 #define C_SET_N    102  /*set numbers*/
@@ -244,10 +247,16 @@ void _delete_line(line *l)
     __line_destroy(l);
 }
 
-int _merge_lines(line *left, line *right, size_t rstart)
+int _merge_lines(line *left, line *right, size_t rstart, size_t *add)
 {
     size_t buf = pw2(left->len + right->len + 1);
     wchar_t *s = realloc(left->s, buf * sizeof(wchar_t));
+    *add = 1;
+    while(left->next != right)
+    {
+        ++*add;
+        _delete_line(left->next);
+    }
     if (s == NULL)
         return E_MALLOC;
     left->s = s;
@@ -474,8 +483,24 @@ int _get_sentence(wchar_t** _buf)
         else
             quotes = 0;
     }
-    s[len] = 0;
+    if(c == WEOF)
+    {
+        return E_EOF;
+    }
+    s[len] = L'\0';
     *_buf = s;
+    while(iswspace(*s))
+        ++s;
+    if(*s == '#')
+    {
+        free(*_buf);
+        return E_COMM;
+    }
+    else if(s - *_buf == len)
+    {
+        free(*_buf);
+        return E_EMPTY;
+    }
     return 0;
 }
 
@@ -612,15 +637,16 @@ int delete_braces(line *begin, line *end, size_t first, size_t last, size_t *tot
                 {
                     size_t len = start->len;
                     size_t rlen = cur->len;
+                    size_t add;
                     int err;
-                    if ((err = _merge_lines(start, cur, pos + 1)) != 0)
+                    if ((err = _merge_lines(start, cur, pos + 1, &add)) != 0)
                         return err;
-                    ++*total;
                     cur = start;
                     cur->len = len + rlen - pos - 1;
                     pos = act_pos = len;
                     --pos;
                     act_len = len;
+                    *total += add;
                 }
             }
         }
@@ -970,55 +996,77 @@ int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream,
                     }
                 }
             }
-            fwprintf(stream, L"\033[30;47m Выход: q, След. страница: SPACE");
-            if(!wrap)
-                fwprintf(stream, L", Навигация: LEFT, RIGHT");
-            fwprintf(stream, L" %s", RESET);
-            while(1)
+            if(isatty(fileno(stdin)))
             {
-                char ready = 0;
-                switch(get_button())
+                fwprintf(stream, L"\033[30;47m Выход: q, След. страница: SPACE");
+                if(!wrap)
+                    fwprintf(stream, L", Навигация: LEFT, RIGHT");
+                fwprintf(stream, L" %s", RESET);
+                while(1)
                 {
-                case B_LEFT:
-                    if(wrap)
-                        continue;
-                    cur = old_cur;
-                    if(offset != 0)
-                        --offset;
-                    ready = 1;
-                    break;
-                case B_RIGHT:
-                    if(wrap)
-                        continue;
-                    ++offset;
-                    ready = 1;
-                    break;
-                case B_SPACE:
-                    if(cur < last)
+                    char ready = 0;
+                    switch(get_button())
                     {
+                    case B_LEFT:
                         if(wrap)
+                            continue;
+                        cur = old_cur;
+                        if(offset != 0)
+                            --offset;
+                        ready = 1;
+                        break;
+                    case B_RIGHT:
+                        if(wrap)
+                            continue;
+                        ++offset;
+                        ready = 1;
+                        break;
+                    case B_SPACE:
+                        if(cur < last)
                         {
-                            old_cur = cur;
+                            if(wrap)
+                            {
+                                old_cur = cur;
+                                ready = 1;
+                                break;
+                            }
+                            old_cur = cur - 1;
+                            offset = 0;
                             ready = 1;
                             break;
                         }
-                        old_cur = cur - 1;
-                        offset = 0;
-                        ready = 1;
-                        break;
+                    case B_Q:
+                        tcsetattr(0, TCSANOW, &old_term);
+                        fwprintf(stream, L"\n");
+                        return 0;
+                    default:
+                        continue;
                     }
-                case B_Q:
+                    if(ready)
+                        break;
+                }
+            }
+            else
+            {
+                if(cur < last)
+                {
+                    if(wrap)
+                    {
+                        old_cur = cur;
+                    }
+                    old_cur = cur - 1;
+                    offset = 0;
+                }
+                else
+                {
                     tcsetattr(0, TCSANOW, &old_term);
                     fwprintf(stream, L"\n");
                     return 0;
-                default:
-                    continue;
                 }
-                if(ready)
-                    break;
             }
         }
     }
+    return 0;
 }
 
 
@@ -1027,8 +1075,18 @@ int get_command(wchar_t** buf, wchar_t** cur)
     wchar_t w1[MAXWORD], w2[MAXWORD];
     int err;
     int ret = 0;
-    fputws(L"editor: ", stdout);
-    _get_sentence(buf);
+    if(isatty(0))
+        fputws(L"editor: ", stdout);
+    if((err = _get_sentence(buf)))
+    {
+        if(err == E_COMM || err == E_EMPTY)
+        {
+            if(isatty(0))
+                fputwc(L'\n', stdout);
+            return get_command(buf, cur);
+        }
+        return err;
+    }
     *cur = *buf;
     if((err = get_word(cur, w1)))
         return err;
@@ -1047,8 +1105,8 @@ int get_command(wchar_t** buf, wchar_t** cur)
         ret = C_HELP;
     if(ret != 0)
         return ret;
-    if((err = get_word(cur, w2)) != 0)
-        return err;
+    if((err = get_word(cur, w2)))
+        return E_C_WRNG;
     if(wcscmp(w1, L"set") == 0)
         if(wcscmp(w2, L"tabwidth") == 0)
             ret = C_SET_T;
@@ -1098,6 +1156,8 @@ int get_command(wchar_t** buf, wchar_t** cur)
 
 int c_read(line* begin, line* end, FILE* stream, size_t* total)
 {
+    size_t add;
+    *total = 0;
     while(1)
     {
         wchar_t* s;
@@ -1125,15 +1185,19 @@ int c_read(line* begin, line* end, FILE* stream, size_t* total)
             s[len++] = c;
         }
         s[len] = L'\0';
-        err = insert_after(end->prev, s, total);
+        err = insert_after(end->prev, s, &add);
         free(s);
         if(err)
         {
             fclose(stream);
             return err;
         }
+        *total += add;
         if(c == WEOF)
+        {
             break;
+        }
+
     }
     fclose(stream);
     return 0;
@@ -1145,7 +1209,7 @@ int c_write(line* begin, line* end, FILE* stream)
     int err;
     while(cur != end)
     {
-        if((err = fwprintf(stream, L"%ls", cur->s)) == -1)
+        if((err = fwprintf(stream, L"%ls\n", cur->s)) == -1)
         {
             fclose(stream);
             return E_IOFAIL;
@@ -1200,6 +1264,8 @@ int inv_print_range(wchar_t** cur,
     get_int(cur, &first);
     get_int(cur, &last);
     ++last;
+    first = MIN(first, len + 1);
+    last = MIN(last, len + 1);
     if((err = print_pages(begin, end, first, last, stdout, num, wrap)))
         return err;
     return 0;
@@ -1271,6 +1337,8 @@ int inv_replace_substring(wchar_t** cur, line* begin, line* end, size_t* len)
     get_int(cur, &first);
     get_int(cur, &last);
     ++last;
+    first = MIN(first, *len + 1);
+    last = MIN(last, *len + 1);
     if((err = get_quoted_string(cur, &sample)))
         return err;
     if((err = get_quoted_string(cur, &repl)))
@@ -1296,6 +1364,8 @@ int inv_delete_range(wchar_t** cur, line* begin, line* end, size_t* len)
     get_int(cur, &first);
     get_int(cur, &last);
     ++last;
+    first = MIN(first, *len + 1);
+    last = MIN(last, *len + 1);
     if((err = delete_range(begin, end, first, last, &total)))
         return err;
     *len -= total;
@@ -1310,6 +1380,8 @@ int inv_delete_braces(wchar_t** cur, line* begin, line* end, size_t* len)
     get_int(cur, &first);
     get_int(cur, &last);
     ++last;
+    first = MIN(first, *len + 1);
+    last = MIN(last, *len + 1);
     if((err = delete_braces(begin, end, first, last, &total)))
         return err;
     *len -= total;
@@ -1425,7 +1497,7 @@ int inv_write(wchar_t** cur, line* begin, line* end, char* path)
         }
         wcstombs(pc, p, l + 1);
     }
-    f = fopen(pc, "w");
+    f = fopen(pc, "w+");
     if(f == NULL)
     {
         if(p != NULL)
@@ -1502,10 +1574,6 @@ int main(int argc, const char *argv[])
     char *path;
     size_t len = 0;
     char change = 0, wrap = 1, num = 1;
-    path = malloc(sizeof(char));
-    if(path == NULL)
-        printerr(E_MALLOC);
-    path[0] = '\0';
     setlocale(LC_ALL, "ru_RU.utf8");
     begin = malloc(sizeof(line));
     end = malloc(sizeof(line));
@@ -1513,12 +1581,45 @@ int main(int argc, const char *argv[])
     __line_init(end);
     begin->next = end;
     end->prev = begin;
+
+
+
+
+    if(argc > 1)
+    {
+        FILE* f;
+        path = malloc((strlen(argv[1]) + 1) * sizeof(char));
+        if(path == NULL)
+            return printerr(E_MALLOC);
+        strcpy(path, argv[1]);
+        f = fopen(path, "r");
+        if(f == NULL)
+            printerr(E_IOFAIL);
+        else
+        {
+            c_read(begin, end, f, &len);
+        }
+    }
+    else
+    {
+        path = malloc(sizeof(char));
+        if(path == NULL)
+            return printerr(E_MALLOC);
+        path[0] = '\0';
+    }
     while(1)
     {
         wchar_t *buf, *cur;
         int cmd = get_command(&buf, &cur);
+        /*wprintf(L"%d\n", cmd);*/
         switch(cmd)
         {
+        case E_EOF:
+            inv_exit(begin, end, 0);
+            break;
+        case E_C_WRNG:
+            printerr(cmd);
+            break;
         case C_SET_T:
             printerr(inv_set_tabwidth(&cur));
             break;
@@ -1568,10 +1669,10 @@ int main(int argc, const char *argv[])
             printerr(inv_read(&cur, begin, end, &len));
             break;
         case C_OPEN:
-            printerr(inv_read(&cur, begin, end, &len));
+            printerr(inv_open(&cur, begin, end, &len, &path));
             break;
         case C_WRITE:
-            printerr(inv_read(&cur, begin, end, &len));
+            printerr(inv_write(&cur, begin, end, path));
             change = 0;
             break;
         case C_SET_NM:
