@@ -1,11 +1,11 @@
 all: format prog
 
 %.o: %.c
-	gcc -std=c89 -Wall -ansi -pedantic -c $<
+	gcc -g -std=c89 -Wall -Wextra -ansi -pedantic -c $<
 	astyle --style=ansi $(CUR_DIR)/$<
 
 prog: main.o
-	gcc -o editor $^
+	gcc -g -o editor $^
 
 CUR_DIR = $(shell pwd)
 
@@ -13,6 +13,9 @@ CUR_DIR = $(shell pwd)
 	astyle --style=ansi $(CUR_DIR)/$<
 
 format: main.form
+
+tests:
+	valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all ./editor < test1
 
 clean:
 	rm -f *.c.orig *.o editor

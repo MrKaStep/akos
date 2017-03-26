@@ -1,4 +1,4 @@
-#define _XOPEN_SOURCE 10
+#define _XOPEN_SOURCE 1000
 
 #include <sys/ioctl.h>
 #include <termios.h>
@@ -14,8 +14,7 @@
 
 #include <linux/limits.h>
 
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
+
 
 #define E_MALLOC 1
 #define E_IOFAIL 2
@@ -28,6 +27,7 @@
 #define E_COMM   9
 #define E_EMPTY  10
 #define E_EOF    11
+#define E_NOTSAV 12
 
 #define C_SET_T    101  /*set tabwidth*/
 #define C_SET_N    102  /*set numbers*/
@@ -82,6 +82,15 @@ typedef struct lines line;
 
 size_t tab_width = 8;
 
+
+size_t min(size_t a, size_t b)
+{
+    if(a > b)
+        return b;
+    return a;
+}
+
+
 size_t pw2(size_t a)
 {
     size_t t = 1;
@@ -95,14 +104,14 @@ size_t pw2(size_t a)
 struct lines
 {
     wchar_t *s;
-    int len;
-    int buf;
+    size_t len;
+    size_t buf;
     line *prev, *next;
 };
 
 int __line_init(line *l)
 {
-    l->s = malloc(sizeof(wchar_t));
+    l->s = calloc(1, sizeof(wchar_t));
     if (l->s == NULL)
         return E_MALLOC;
     l->s[0] = 0;
@@ -115,7 +124,7 @@ int __line_init(line *l)
 int __line_init_str(line *l, const wchar_t *s, int len)
 {
     size_t buf = pw2(len + 1);
-    l->s = malloc(buf * sizeof(wchar_t));
+    l->s = calloc(1, buf * sizeof(wchar_t));
     if (l->s == NULL)
         return E_MALLOC;
     wcsncpy(l->s, s, len);
@@ -132,21 +141,21 @@ void __line_destroy(line *l)
     free(l);
 }
 
-wchar_t _wcscat_at(const wchar_t *str1, size_t len1, const wchar_t *str2, size_t len2, size_t pos)
+/*wchar_t _wcscat_at(const wchar_t *str1, size_t len1, const wchar_t *str2, size_t len2, size_t pos)
 {
     if(pos < len1)
         return str1[pos];
     if(pos == len1)
         return L'\0';
     return str2[pos - len1 - 1];
-}
+}*/
 
 int _z_function(size_t **z, const wchar_t *str1, size_t len1, const wchar_t *str2, size_t len2)
 {
     size_t l = 0, r = 0, i;
     size_t len = len1 + len2 + 1;
     size_t *Z;
-    *z = malloc((len1 + len2 + 1) * sizeof(size_t));
+    *z = calloc(1, (len1 + len2 + 1) * sizeof(size_t));
     if (*z == NULL)
         return E_MALLOC;
     Z = *z;
@@ -156,7 +165,7 @@ int _z_function(size_t **z, const wchar_t *str1, size_t len1, const wchar_t *str
         Z[i] = 0;
         if (r > i)
         {
-            Z[i] = MIN(r - i, Z[i - l]);
+            Z[i] = min(r - i, Z[i - l]);
         }
         while (i + Z[i] < len &&
                 (i + Z[i] < len1 ? str1[i + Z[i]] : i + Z[i] > len1 ? str2[i + Z[i] - len1 - 1] : L'\0') == (Z[i] < len1 ? str1[Z[i]] : Z[i] > len1 ? str2[Z[i] - len1 - 1] : L'\0'))
@@ -194,7 +203,7 @@ int _resize_line(line *l)
 int _refine_line(line *l, size_t* total)
 {
     size_t segm = 1, buf = 2;
-    size_t *arr = malloc(2 * sizeof(size_t));
+    size_t *arr = calloc(1, 2 * sizeof(size_t));
     size_t i;
     line *start, *end;
     arr[0] = 0;
@@ -213,13 +222,13 @@ int _refine_line(line *l, size_t* total)
     }
     *total = segm;
     arr[segm] = l->len + 1;
-    start = malloc(sizeof(line));
+    start = calloc(1, sizeof(line));
     start->next = NULL;
     end = start;
     for (i = 0; i < segm; ++i)
     {
         int err;
-        line *x = malloc(sizeof(line));
+        line *x = calloc(1, sizeof(line));
         size_t len = arr[i + 1] - arr[i] - 1;
         if ((err = __line_init_str(x, l->s + arr[i], len)) != 0)
         {
@@ -280,10 +289,10 @@ int _merge_lines(line *left, line *right, size_t rstart, size_t *add)
 line* _find_line(line *begin, line *end, size_t index)
 {
     line *l = begin;
-    int i = 0;
-    while (l != end && i != index)
+    size_t i = 0;
+    while ((l != end) && (i != index))
     {
-        l = l->next;
+        l = (l->next);
         ++i;
     }
     return l;
@@ -340,11 +349,11 @@ int _print_line(line* l, char mode, size_t width, size_t offset, FILE* stream,..
         {
             size_t i;
             fwprintf(stream, L"%s%ls%s", GREEN, cur == offset ? num : space, RESET);
-            for(i = cur; i + add < MIN(l->len + add, cur + width); ++i)
+            for(i = cur; i + add < min(l->len + add, cur + width); ++i)
                 if((mode & M_TAB) && l->s[i] == '\t')
                 {
                     size_t j;
-                    for(j = 0; j < tab_width && i + add < MIN(l->len + add, cur + width); ++j, ++add)
+                    for(j = 0; j < tab_width && i + add < min(l->len + add, cur + width); ++j, ++add)
                         if(fputwc(L' ', stream) == WEOF)
                             return E_IOFAIL;
                 }
@@ -362,11 +371,11 @@ int _print_line(line* l, char mode, size_t width, size_t offset, FILE* stream,..
     {
         size_t i;
         fwprintf(stream, L"%s%ls%s", GREEN, num, RESET);
-        for(i = offset; i + add < MIN(l->len + add, offset + width); ++i)
+        for(i = offset; i + add < min(l->len + add, offset + width); ++i)
             if((mode & M_TAB) && l->s[i] == '\t')
             {
                 size_t j;
-                for(j = 0; j < tab_width && i + add < MIN(l->len + add, offset + width); ++j, ++add)
+                for(j = 0; j < tab_width && i + add < min(l->len + add, offset + width); ++j, ++add)
                     if(fputwc(L' ', stream) == WEOF)
                         return E_IOFAIL;
             }
@@ -394,7 +403,7 @@ int _replace_substring(line *l, const wchar_t *sample, const wchar_t *repl, size
     {
         nbuf = pw2(l->len + rlen);
         nlen = l->len + rlen;
-        buf = malloc(pw2(l->len + rlen + 1) * sizeof(wchar_t));
+        buf = calloc(1, pw2(l->len + rlen + 1) * sizeof(wchar_t));
         if(buf == NULL)
             return E_MALLOC;
         if(sample[0] == L'^')
@@ -407,12 +416,14 @@ int _replace_substring(line *l, const wchar_t *sample, const wchar_t *repl, size
             memcpy(buf, l->s, l->len * sizeof(wchar_t));
             memcpy(buf + l->len, repl, rlen * sizeof(wchar_t));
         }
+        buf[l->len + rlen] = L'\0';
         free(l->s);
         l->s = buf;
         l->buf = nbuf;
         l->len = nlen;
         if((err = _refine_line(l, total)))
             return err;
+        return 0;
     }
 
 
@@ -433,7 +444,7 @@ int _replace_substring(line *l, const wchar_t *sample, const wchar_t *repl, size
 
     nlen = l->len - subst * slen + subst * rlen;
     nbuf = pw2(nlen + 1);
-    buf = malloc(nbuf * sizeof(wchar_t));
+    buf = calloc(1, nbuf * sizeof(wchar_t));
     if (buf == NULL)
         return E_MALLOC;
     i = 0;
@@ -470,7 +481,7 @@ int _get_sentence(wchar_t** _buf)
     wchar_t *s;
     wint_t c;
     size_t len = 0, buf = 16;
-    s = malloc(16 * sizeof(wchar_t));
+    s = calloc(1, 16 * sizeof(wchar_t));
     if(s == NULL)
         return E_MALLOC;
     while((c = fgetwc(stdin)) != WEOF && (c != L'\n' || quotes_flag))
@@ -507,7 +518,7 @@ int _get_sentence(wchar_t** _buf)
         free(*_buf);
         return E_COMM;
     }
-    else if(s - *_buf == len)
+    else if(s == *_buf + len)
     {
         free(*_buf);
         return E_EMPTY;
@@ -542,10 +553,10 @@ int insert_after(line *l, const wchar_t *s, size_t *total)
     size_t buf;
     len = wcslen(s);
     buf = pw2(len);
-    t = malloc(sizeof(line));
+    t = calloc(1, sizeof(line));
     if (t == NULL)
         return E_MALLOC;
-    t->s = malloc(buf * sizeof(wchar_t));
+    t->s = calloc(1, buf * sizeof(wchar_t));
     if (t->s == NULL)
     {
         free(t);
@@ -574,11 +585,9 @@ int edit_string(line *l, size_t pos, wchar_t symb)
 
 int insert_symbol(line *l, size_t pos, wchar_t symb)
 {
-    ssize_t i;
+    size_t i;
     if (pos > l->len)
         pos = l->len;
-    if (pos < 0)
-        pos = 0;
     if (l->len == l->buf - 1)
     {
         if ((l->buf = _expand_array((void **)&(l->s), l->buf, sizeof(wchar_t))) - 1 == l->len)
@@ -683,18 +692,20 @@ int replace_substring(line* begin, line* end, size_t first, size_t last,
                       const wchar_t* sample, const wchar_t* repl, size_t* total)
 {
     int err;
-    line *l, *next;
-    size_t sum = 0, cur = first, tmp;
+    line *l, *nxt;
+    size_t cur = first;
     l = _find_line(begin, end, first);
+    *total = 0;
     if(l == NULL)
         return E_LNRNG;
     while(l != end && cur != last)
     {
-        next = l->next;
+        size_t tmp;
+        nxt = l->next;
         if((err = _replace_substring(l, sample, repl, &tmp)))
             return err;
-        sum += tmp - 1;
-        l = next;
+        *total += tmp - 1;
+        l = nxt;
     }
     return 0;
 }
@@ -743,7 +754,7 @@ int get_quoted_string(wchar_t** _buf, wchar_t** s)
     if(**_buf == L'\n' || **_buf == L'\0')
         return E_NOARG;
     last = (*_buf)++;
-    *s = malloc(pw2(last - first - spec + 1) * sizeof(wchar_t));
+    *s = calloc(1, pw2(last - first - spec + 1) * sizeof(wchar_t));
     if(s == NULL)
         return E_MALLOC;
     for(i = first; i != last; ++i)
@@ -782,7 +793,7 @@ int get_triple_quoted_string(wchar_t** _buf, wchar_t** s)
     ++*_buf;
     if(**_buf != L'\"')
     {
-        *s = malloc(sizeof(wchar_t));
+        *s = calloc(1, sizeof(wchar_t));
         (*s)[0] = L'\0';
         return 0;
     }
@@ -810,7 +821,7 @@ int get_triple_quoted_string(wchar_t** _buf, wchar_t** s)
         ++first;
     if(last != first && *(last - 1) == L'\n' && *(last - 2) != L'\\')
         --last;
-    *s = malloc((last - first - spec + 1) * sizeof(wchar_t));
+    *s = calloc(1, (last - first - spec + 1) * sizeof(wchar_t));
     for(i = first; i != last; ++i)
     {
         wchar_t c;
@@ -929,6 +940,8 @@ int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream,
         tcsetattr(0, TCSANOW, &new_term);
         ioctl(1, TIOCGWINSZ, &sz);
         height = sz.ws_row - 1;
+        if(!isatty(0))
+            ++height;
         width = sz.ws_col;
         cur = old_cur = first;
 
@@ -1178,7 +1191,7 @@ int get_command(wchar_t** buf, wchar_t** cur)
     return ret;
 }
 
-int c_read(line* begin, line* end, FILE* stream, size_t* total)
+int c_read(line* end, FILE* stream, size_t* total)
 {
     size_t add;
     *total = 0;
@@ -1188,7 +1201,7 @@ int c_read(line* begin, line* end, FILE* stream, size_t* total)
         size_t buf = 4, len = 0;
         wint_t c;
         int err;
-        s = malloc(4 * sizeof(wchar_t));
+        s = calloc(1, 4 * sizeof(wchar_t));
         if(s == NULL)
         {
             fclose(stream);
@@ -1269,8 +1282,7 @@ int inv_set_numbers(wchar_t** cur, char* num)
     return 0;
 }
 
-int inv_print_pages(wchar_t** cur,
-                    line* begin, line* end, size_t len,
+int inv_print_pages(line* begin, line* end, size_t len,
                     char num, char wrap)
 {
     int err;
@@ -1288,8 +1300,8 @@ int inv_print_range(wchar_t** cur,
     get_int(cur, &first);
     get_int(cur, &last);
     ++last;
-    first = MIN(first, len + 1);
-    last = MIN(last, len + 1);
+    first = min(first, len + 1);
+    last = min(last, len + 1);
     if((err = print_pages(begin, end, first, last, stdout, num, wrap)))
         return err;
     return 0;
@@ -1321,13 +1333,16 @@ int inv_insert_after(wchar_t** cur,
     wchar_t *s = NULL;
     if((err = get_int(cur, &ln)))
         ln = *len;
-    ln = MIN(ln, *len);
+    if(ln > *len)
+        ln = *len;
     if((err = get_triple_quoted_string(cur, &s)))
         return err;
     l = _find_line(begin, end, ln);
     if(l == NULL)
         return E_LNRNG;
-    insert_after(l, s, &total);
+    if((err = insert_after(l, s, &total)))
+        return err;
+    free(s);
     *len += total;
     return 0;
 }
@@ -1362,8 +1377,10 @@ int inv_replace_substring(wchar_t** cur, line* begin, line* end, size_t* len)
     get_int(cur, &first);
     get_int(cur, &last);
     ++last;
-    first = MIN(first, *len + 1);
-    last = MIN(last, *len + 1);
+    if(first > (*len) + 1)
+        first = (*len) + 1;
+    if(last > (*len) + 1)
+        last = (*len) + 1;
     if((err = get_quoted_string(cur, &sample)))
         return err;
     if((err = get_quoted_string(cur, &repl)))
@@ -1377,6 +1394,8 @@ int inv_replace_substring(wchar_t** cur, line* begin, line* end, size_t* len)
         free(repl);
         return err;
     }
+    free(sample);
+    free(repl);
     *len += total;
     return 0;
 }
@@ -1389,8 +1408,8 @@ int inv_delete_range(wchar_t** cur, line* begin, line* end, size_t* len)
     get_int(cur, &first);
     get_int(cur, &last);
     ++last;
-    first = MIN(first, *len + 1);
-    last = MIN(last, *len + 1);
+    first = min(first, *len + 1);
+    last = min(last, *len + 1);
     if((err = delete_range(begin, end, first, last, &total)))
         return err;
     *len -= total;
@@ -1405,29 +1424,28 @@ int inv_delete_braces(wchar_t** cur, line* begin, line* end, size_t* len)
     get_int(cur, &first);
     get_int(cur, &last);
     ++last;
-    first = MIN(first, *len + 1);
-    last = MIN(last, *len + 1);
+    first = min(first, *len + 1);
+    last = min(last, *len + 1);
     if((err = delete_braces(begin, end, first, last, &total)))
         return err;
     *len -= total;
     return 0;
 }
 
-int inv_exit(line* begin, line* end, char change)
+int inv_exit(line* begin, line* end, char* path, wchar_t* buf, char change)
 {
     size_t trash;
     if(change)
-    {
-        wprintf(L"File not saved. Use %sexit force%s to exit anyway.\n", RED, RESET);
-        return 0;
-    }
+        return E_NOTSAV;
     delete_range(begin, end, 1, -1, &trash);
     __line_destroy(begin);
     __line_destroy(end);
+    free(path);
+    free(buf);
     exit(0);
 }
 
-int inv_read(wchar_t** cur, line* begin, line* end, size_t* len)
+int inv_read(wchar_t** cur, line* end, size_t* len)
 {
     int err;
     wchar_t *p;
@@ -1437,7 +1455,7 @@ int inv_read(wchar_t** cur, line* begin, line* end, size_t* len)
     if((err = get_quoted_string(cur, &p)))
         return err;
     l = wcstombs(NULL, p, 0);
-    pc = malloc(l + 1);
+    pc = calloc(1, l + 1);
     if(pc == NULL)
     {
         free(p);
@@ -1451,7 +1469,7 @@ int inv_read(wchar_t** cur, line* begin, line* end, size_t* len)
         free(pc);
         return E_IOFAIL;
     }
-    if((err = c_read(begin, end, f, len)))
+    if((err = c_read(end, f, len)))
     {
         free(p);
         free(pc);
@@ -1460,7 +1478,7 @@ int inv_read(wchar_t** cur, line* begin, line* end, size_t* len)
     return 0;
 }
 
-int inv_open(wchar_t** cur, line* begin, line* end, size_t* len, char** path)
+int inv_open(wchar_t** cur, line* end, size_t* len, char** path)
 {
     int err;
     wchar_t *p;
@@ -1470,7 +1488,7 @@ int inv_open(wchar_t** cur, line* begin, line* end, size_t* len, char** path)
     if((err = get_quoted_string(cur, &p)))
         return err;
     l = wcstombs(NULL, p, 0);
-    pc = malloc(l + 1);
+    pc = calloc(1, l + 1);
     if(pc == NULL)
     {
         free(p);
@@ -1489,7 +1507,7 @@ int inv_open(wchar_t** cur, line* begin, line* end, size_t* len, char** path)
         free(*path);
         strcpy(pc, *path);
     }
-    if((err = c_read(begin, end, f, len)))
+    if((err = c_read(end, f, len)))
     {
         free(p);
         free(pc);
@@ -1514,7 +1532,7 @@ int inv_write(wchar_t** cur, line* begin, line* end, char* path)
     else
     {
         l = wcstombs(NULL, p, 0);
-        pc = malloc(l + 1);
+        pc = calloc(1, l + 1);
         if(pc == NULL)
         {
             free(p);
@@ -1555,16 +1573,17 @@ int inv_set_name(wchar_t** cur, char** path)
         return err;
     free(*path);
     l = wcstombs(NULL, p, 0);
-    *path = malloc(l + 1);
+    *path = calloc(1, l + 1);
     wcstombs(*path, p, l + 1);
     return 0;
 }
-
 
 int printerr(int err)
 {
     switch(err)
     {
+    case 0:
+        break;
     case E_STRRNG:
         fwprintf(stderr, L"Incorrect symbol position\n");
         break;
@@ -1589,6 +1608,11 @@ int printerr(int err)
     case E_NOFILE:
         fwprintf(stderr, L"No file specified\n");
         break;
+    case E_NOTSAV:
+        wprintf(L"File not saved. Use %sexit force%s to exit anyway.\n", RED, RESET);
+        break;
+    default:
+        fwprintf(stderr, L"What the...");
     }
     return err;
 }
@@ -1600,20 +1624,18 @@ int main(int argc, const char *argv[])
     size_t len = 0;
     char change = 0, wrap = 1, num = 1;
     setlocale(LC_ALL, "ru_RU.utf8");
-    begin = malloc(sizeof(line));
-    end = malloc(sizeof(line));
+    begin = calloc(1, sizeof(line));
+    end = calloc(1, sizeof(line));
     __line_init(begin);
     __line_init(end);
     begin->next = end;
     end->prev = begin;
 
 
-
-
     if(argc > 1)
     {
         FILE* f;
-        path = malloc((strlen(argv[1]) + 1) * sizeof(char));
+        path = calloc(1, (strlen(argv[1]) + 1) * sizeof(char));
         if(path == NULL)
             return printerr(E_MALLOC);
         strcpy(path, argv[1]);
@@ -1622,12 +1644,12 @@ int main(int argc, const char *argv[])
             printerr(E_IOFAIL);
         else
         {
-            c_read(begin, end, f, &len);
+            c_read(end, f, &len);
         }
     }
     else
     {
-        path = malloc(sizeof(char));
+        path = calloc(1, sizeof(char));
         if(path == NULL)
             return printerr(E_MALLOC);
         path[0] = '\0';
@@ -1636,11 +1658,10 @@ int main(int argc, const char *argv[])
     {
         wchar_t *buf, *cur;
         int cmd = get_command(&buf, &cur);
-        /*wprintf(L"%d\n", cmd);*/
         switch(cmd)
         {
         case E_EOF:
-            inv_exit(begin, end, 0);
+            inv_exit(begin, end, path, buf, 0);
             break;
         case E_C_WRNG:
             printerr(cmd);
@@ -1652,7 +1673,7 @@ int main(int argc, const char *argv[])
             printerr(inv_set_numbers(&cur, &num));
             break;
         case C_PRINT_P:
-            printerr(inv_print_pages(&cur, begin, end, len, num, wrap));
+            printerr(inv_print_pages(begin, end, len, num, wrap));
             break;
         case C_PRINT_R:
             printerr(inv_print_range(&cur, begin, end, len, num, wrap));
@@ -1685,16 +1706,16 @@ int main(int argc, const char *argv[])
             change = 1;
             break;
         case C_EXIT:
-            printerr(inv_exit(begin, end, change));
+            printerr(inv_exit(begin, end, path, buf, change));
             break;
         case C_EXIT_F:
-            printerr(inv_exit(begin, end, (char)0));
+            printerr(inv_exit(begin, end, path, buf, 0));
             break;
         case C_READ:
-            printerr(inv_read(&cur, begin, end, &len));
+            printerr(inv_read(&cur, end, &len));
             break;
         case C_OPEN:
-            printerr(inv_open(&cur, begin, end, &len, &path));
+            printerr(inv_open(&cur, end, &len, &path));
             break;
         case C_WRITE:
             printerr(inv_write(&cur, begin, end, path));
@@ -1706,6 +1727,7 @@ int main(int argc, const char *argv[])
         case C_HELP:
             break;
         }
+        free(buf);
     }
     return 0;
 }
