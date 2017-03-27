@@ -1,11 +1,11 @@
 all: format prog
 
 %.o: %.c
-	gcc -g -std=c89 -Wall -Wextra -ansi -pedantic -c $<
+	gcc -std=c89 -Wall -Wextra -ansi -pedantic -c $<
 	astyle --style=ansi $(CUR_DIR)/$<
 
 prog: main.o
-	gcc -g -o editor $^
+	gcc -o editor $^
 
 CUR_DIR = $(shell pwd)
 

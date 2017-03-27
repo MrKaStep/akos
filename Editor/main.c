@@ -859,11 +859,6 @@ int get_symb(wchar_t **buf, wchar_t* c, char spec)
         ++*buf;
     if(**buf == L'\0')
         return E_NOARG;
-    if(spec && **buf == '\'')
-    {
-        ++*buf;
-        return get_symb(buf, c, 1);
-    }
     if(spec && **buf == '\\')
     {
         ++*buf;
