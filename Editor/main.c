@@ -90,6 +90,10 @@ size_t min(size_t a, size_t b)
     return a;
 }
 
+/**
+  * returns minimal power of two
+  * greater or equal than a
+  */
 
 size_t pw2(size_t a)
 {
@@ -109,7 +113,11 @@ struct lines
     line *prev, *next;
 };
 
-int __line_init(line *l)
+/**
+  * basic line constructor
+  */
+
+int line_struct_line_init(line *l)
 {
     l->s = calloc(1, sizeof(wchar_t));
     if (l->s == NULL)
@@ -121,7 +129,11 @@ int __line_init(line *l)
     return 0;
 }
 
-int __line_init_str(line *l, const wchar_t *s, int len)
+/**
+  * constructs line from string
+  */
+
+int line_struct_line_init_str(line *l, const wchar_t *s, int len)
 {
     size_t buf = pw2(len + 1);
     l->s = calloc(1, buf * sizeof(wchar_t));
@@ -135,20 +147,32 @@ int __line_init_str(line *l, const wchar_t *s, int len)
     return 0;
 }
 
-void __line_destroy(line *l)
+/**
+  * destroys line, deallocating memory for string and for structure itself
+  */
+
+void line_struct_line_destroy(line *l)
 {
     free(l->s);
     free(l);
 }
 
-/*wchar_t _wcscat_at(const wchar_t *str1, size_t len1, const wchar_t *str2, size_t len2, size_t pos)
+/**
+  * returns symbol at position pos from concatenation of str1, null-symbol and str2
+  */
+
+wchar_t wcscat_at(const wchar_t *str1, size_t len1, const wchar_t *str2, size_t pos)
 {
     if(pos < len1)
         return str1[pos];
     if(pos == len1)
         return L'\0';
     return str2[pos - len1 - 1];
-}*/
+}
+
+/**
+  * calculates z-function for concatenation of str1, null-symbol and str2
+  */
 
 int _z_function(size_t **z, const wchar_t *str1, size_t len1, const wchar_t *str2, size_t len2)
 {
@@ -168,7 +192,7 @@ int _z_function(size_t **z, const wchar_t *str1, size_t len1, const wchar_t *str
             Z[i] = min(r - i, Z[i - l]);
         }
         while (i + Z[i] < len &&
-                (i + Z[i] < len1 ? str1[i + Z[i]] : i + Z[i] > len1 ? str2[i + Z[i] - len1 - 1] : L'\0') == (Z[i] < len1 ? str1[Z[i]] : Z[i] > len1 ? str2[Z[i] - len1 - 1] : L'\0'))
+                wcscat_at(str1, len1, str2, Z[i]) == wcscat_at(str1, len1, str2, i + Z[i]))
             ++Z[i];
         if (i + Z[i] > r)
             l = i, r = i + Z[i];
@@ -176,7 +200,13 @@ int _z_function(size_t **z, const wchar_t *str1, size_t len1, const wchar_t *str
     return 0;
 }
 
-size_t _expand_array(void **s, size_t len, size_t item)
+
+/**
+  * attempts to expand array consisting of len items of size item
+  * returns number of successfully added items
+  */
+
+size_t expand_array(void **s, size_t len, size_t item)
 {
     size_t add = (len > 0 ? len : 1);
     void *ans;
@@ -189,7 +219,12 @@ size_t _expand_array(void **s, size_t len, size_t item)
     return add + len;
 }
 
-int _resize_line(line *l)
+
+/**
+  * resizes line to pw2(l->len) to support linear amount of memory
+  */
+
+int resize_line(line *l)
 {
     size_t buf = pw2(l->len + 1);
     wchar_t *s = realloc(l->s, buf * sizeof(wchar_t));
@@ -200,7 +235,13 @@ int _resize_line(line *l)
     return 0;
 }
 
-int _refine_line(line *l, size_t* total)
+/**
+  * splits line by '\n' symbols into several lines
+  * structure is kept correct
+  * puts number of resulting line at address total
+  */
+
+int refine_line(line *l, size_t* total)
 {
     size_t segm = 1, buf = 2;
     size_t *arr = calloc(1, 2 * sizeof(size_t));
@@ -213,7 +254,7 @@ int _refine_line(line *l, size_t* total)
         {
             if (segm == buf - 1)
             {
-                if ((buf = _expand_array((void **)&arr, buf, sizeof(size_t))) - 1 == segm)
+                if ((buf = expand_array((void **)&arr, buf, sizeof(size_t))) - 1 == segm)
                     return E_MALLOC;
             }
             arr[segm] = i + 1;
@@ -230,7 +271,7 @@ int _refine_line(line *l, size_t* total)
         int err;
         line *x = calloc(1, sizeof(line));
         size_t len = arr[i + 1] - arr[i] - 1;
-        if ((err = __line_init_str(x, l->s + arr[i], len)) != 0)
+        if ((err = line_struct_line_init_str(x, l->s + arr[i], len)) != 0)
         {
             line *c = start;
             do
@@ -252,20 +293,33 @@ int _refine_line(line *l, size_t* total)
     start->next->prev = l->prev;
     l->next->prev = end;
     end->next = l->next;
-    __line_destroy(l);
+    line_struct_line_destroy(l);
     free(arr);
     free(start);
     return 0;
 }
 
+
+/**
+  * deletes line from text
+  */
+
 void _delete_line(line *l)
 {
     l->next->prev = l->prev;
     l->prev->next = l->next;
-    __line_destroy(l);
+    line_struct_line_destroy(l);
 }
 
-int _merge_lines(line *left, line *right, size_t rstart, size_t *add)
+
+/**
+  * collapses two lines into one
+  * second line start is specified as rstart
+  * everything between the end of left line and rstart at right line is destroyed
+  * puts difference between initial and resulting number of line at address add
+  */
+
+int merge_lines(line *left, line *right, size_t rstart, size_t *add)
 {
     size_t buf = pw2(left->len + right->len + 1);
     wchar_t *s = realloc(left->s, buf * sizeof(wchar_t));
@@ -282,11 +336,17 @@ int _merge_lines(line *left, line *right, size_t rstart, size_t *add)
     wcsncpy(left->s + right->len, right->s + rstart, right->len - rstart + 1);
     left->next = right->next;
     left->next->prev = left;
-    __line_destroy(right);
+    line_struct_line_destroy(right);
     return 0;
 }
 
-line* _find_line(line *begin, line *end, size_t index)
+
+/**
+  * return pointer to line in text specified by begin and end pointers
+  * at position index
+  */
+
+line* find_line(line *begin, line *end, size_t index)
 {
     line *l = begin;
     size_t i = 0;
@@ -298,7 +358,24 @@ line* _find_line(line *begin, line *end, size_t index)
     return l;
 }
 
-int _print_line(line* l, char mode, size_t width, size_t offset, FILE* stream,...)
+
+/**
+  * prints line l to stream with specified parameters
+  * parameter mode is a mask containing modes from list
+  ** M_WRAP --- if wrapping is required
+  ** M_NUM  --- if line numbers are required
+  ** M_TAB  --- if '\t' symbols should be replaced by spaces
+  * width parameter specifies maximum line width
+  * offset parameter specifies first symbol that has to be printed
+  *
+  * If M_NUM is specified, two arguments after stream have to be width of line number
+  * and line number itself
+  *
+  * If M_WRAP is specified, pointer to remaining height of terminal has to be the last argument
+  * It will be decremented by number of actually printed lines
+  */
+
+int print_line(line* l, char mode, size_t width, size_t offset, FILE* stream,...)
 {
     wchar_t space[10], num[10];
     size_t add = 0;
@@ -388,7 +465,16 @@ int _print_line(line* l, char mode, size_t width, size_t offset, FILE* stream,..
     return 0;
 }
 
-int _replace_substring(line *l, const wchar_t *sample, const wchar_t *repl, size_t* total)
+
+/**
+  * replaces all occurences of sample string with repl string
+  * puts number of lines, produced by this replace at address total
+  *
+  * Uses z-function to find all occurences in linear time
+  */
+
+
+int line_replace_substring(line *l, const wchar_t *sample, const wchar_t *repl, size_t* total)
 {
     size_t *z;
     size_t slen = wcslen(sample), rlen = wcslen(repl);
@@ -421,7 +507,7 @@ int _replace_substring(line *l, const wchar_t *sample, const wchar_t *repl, size
         l->s = buf;
         l->buf = nbuf;
         l->len = nlen;
-        if((err = _refine_line(l, total)))
+        if((err = refine_line(l, total)))
             return err;
         return 0;
     }
@@ -469,13 +555,19 @@ int _replace_substring(line *l, const wchar_t *sample, const wchar_t *repl, size
     l->s = buf;
     l->buf = nbuf;
     l->len = nlen;
-    if((err = _refine_line(l, total)))
+    if((err = refine_line(l, total)))
         return err;
     return 0;
 }
 
 
-int _get_sentence(wchar_t** _buf)
+/**
+  * gets command specified by user and puts it at _buf address
+  * if no triple quotes met, reads to the end-of-line
+  * otherwise, reads to the end of line containing closing triple quotes
+  */
+
+int get_sentence(wchar_t** _buf)
 {
     char quotes_flag = 0;
     char quotes = 0;
@@ -489,7 +581,7 @@ int _get_sentence(wchar_t** _buf)
     {
         if(len + 1 == buf)
         {
-            buf = _expand_array((void**)&s, buf, sizeof(wchar_t));
+            buf = expand_array((void**)&s, buf, sizeof(wchar_t));
             if(len + 1 == buf)
             {
                 free(s);
@@ -533,6 +625,11 @@ int _get_sentence(wchar_t** _buf)
 }
 
 
+/**
+  * returns special symbol, as if it was preceded by backslash symbol
+  * if specified symbol has no special meaning, return symbol itself
+  */
+
 wchar_t spec_symb(wchar_t symb)
 {
     switch(symb)
@@ -551,6 +648,12 @@ wchar_t spec_symb(wchar_t symb)
         return symb;
     }
 }
+
+
+/**
+  * implements isertion of line specified by string s after line l
+  * puts number of lines added at address total
+  */
 
 int insert_after(line *l, const wchar_t *s, size_t *total)
 {
@@ -575,9 +678,14 @@ int insert_after(line *l, const wchar_t *s, size_t *total)
     t->next = l->next;
     t->prev->next = t;
     t->next->prev = t;
-    _refine_line(t, total);
+    refine_line(t, total);
     return 0;
 }
+
+/**
+  * changes symbol of line l at position pos to symbol symb
+  */
+
 
 int edit_string(line *l, size_t pos, wchar_t symb)
 {
@@ -589,6 +697,10 @@ int edit_string(line *l, size_t pos, wchar_t symb)
     return 0;
 }
 
+/**
+  * inserts symbol symb to line l after position pos
+  */
+
 int insert_symbol(line *l, size_t pos, wchar_t symb)
 {
     size_t i;
@@ -596,7 +708,7 @@ int insert_symbol(line *l, size_t pos, wchar_t symb)
         pos = l->len;
     if (l->len == l->buf - 1)
     {
-        if ((l->buf = _expand_array((void **)&(l->s), l->buf, sizeof(wchar_t))) - 1 == l->len)
+        if ((l->buf = expand_array((void **)&(l->s), l->buf, sizeof(wchar_t))) - 1 == l->len)
             return E_MALLOC;
     }
     ++l->len;
@@ -605,6 +717,11 @@ int insert_symbol(line *l, size_t pos, wchar_t symb)
     l->s[pos] = symb;
     return 0;
 }
+
+/**
+  * implements line range deleting function
+  * puts difference between resulting and initial number of lines at address total
+  */
 
 int delete_range(line *begin, line *end, size_t first, size_t last, size_t *total)
 {
@@ -617,6 +734,13 @@ int delete_range(line *begin, line *end, size_t first, size_t last, size_t *tota
         _delete_line(cur->next), ++*total;
     return 0;
 }
+
+
+/**
+  * deletes everything between {...} including braces
+  * uses single pass and merge_lines function to delete multistring braces
+  * puts difference between resulting and initial number of lines at address total
+  */
 
 int delete_braces(line *begin, line *end, size_t first, size_t last, size_t *total)
 {
@@ -665,7 +789,7 @@ int delete_braces(line *begin, line *end, size_t first, size_t last, size_t *tot
                     size_t rlen = cur->len;
                     size_t add;
                     int err;
-                    if ((err = _merge_lines(start, cur, pos + 1, &add)) != 0)
+                    if ((err = merge_lines(start, cur, pos + 1, &add)) != 0)
                         return err;
                     cur = start;
                     cur->len = len + rlen - pos - 1;
@@ -688,11 +812,17 @@ int delete_braces(line *begin, line *end, size_t first, size_t last, size_t *tot
         if((err = delete_range(begin, end, del_i + 1, last, &tmp)))
             return err;
         *total += tmp;
-        if ((err = _resize_line(start)))
+        if ((err = resize_line(start)))
             return err;
     }
     return 0;
 }
+
+/**
+  * runs line_replace_substring for all lines in range [first, last) in text
+  * specified by begin and end
+  * puts difference between resulting and initial number of lines at address total
+  */
 
 int replace_substring(line* begin, line* end, size_t first, size_t last,
                       const wchar_t* sample, const wchar_t* repl, size_t* total)
@@ -700,7 +830,7 @@ int replace_substring(line* begin, line* end, size_t first, size_t last,
     int err;
     line *l, *nxt;
     size_t cur = first;
-    l = _find_line(begin, end, first);
+    l = find_line(begin, end, first);
     *total = 0;
     if(l == NULL)
         return E_LNRNG;
@@ -708,13 +838,20 @@ int replace_substring(line* begin, line* end, size_t first, size_t last,
     {
         size_t tmp;
         nxt = l->next;
-        if((err = _replace_substring(l, sample, repl, &tmp)))
+        if((err = line_replace_substring(l, sample, repl, &tmp)))
             return err;
         *total += tmp - 1;
         l = nxt;
     }
     return 0;
 }
+
+/**
+  * reads next word (sequence of letters) from string specified by _buf
+  * and puts it at address s
+  * If first non-space symbol is not a letter, returns E_C_WRNG
+  * If word length is greater than MAXWORD, returns E_C_WRNG
+  */
 
 int get_word(wchar_t **_buf, wchar_t* s)
 {
@@ -734,6 +871,11 @@ int get_word(wchar_t **_buf, wchar_t* s)
     return 0;
 }
 
+/**
+  * reads next single-quoted string (sequence of symbols between nearest and farthest quotes)
+  * from string specified by _buf and puts it at address *s
+  * If first non-space symbol is not a quote, returns E_NOARG
+  */
 
 int get_quoted_string(wchar_t** _buf, wchar_t** s)
 {
@@ -780,6 +922,12 @@ int get_quoted_string(wchar_t** _buf, wchar_t** s)
     (*s)[len] = L'\0';
     return 0;
 }
+
+
+/**
+  * reads triple quoted string or, if only quoted string specified,
+  * reads quoted string from _buf
+  */
 
 int get_triple_quoted_string(wchar_t** _buf, wchar_t** s)
 {
@@ -843,6 +991,13 @@ int get_triple_quoted_string(wchar_t** _buf, wchar_t** s)
     return 0;
 }
 
+
+/**
+  * reads next integer from _buf
+  * If first non-space symbol is not a digit, return E_NOARG
+  */
+
+
 int get_int(wchar_t **_buf, size_t* a)
 {
     while(iswspace(**_buf) && **_buf != L'\0')
@@ -858,6 +1013,12 @@ int get_int(wchar_t **_buf, size_t* a)
     }
     return 0;
 }
+
+
+/**
+  * reads next non-space symbol from _buf
+  * If symbol is preceded by backslash it is treated as if it was single special symbol
+  */
 
 int get_symb(wchar_t **buf, wchar_t* c, char spec)
 {
@@ -876,6 +1037,13 @@ int get_symb(wchar_t **buf, wchar_t* c, char spec)
     *c = **buf;
     return 0;
 }
+
+
+/**
+  * returns last pressed button for print pages mode
+  * If it is necessary for this mode, appropriate code is returned
+  * Otherwise, B_ANY is returned
+  */
 
 int get_button()
 {
@@ -901,12 +1069,24 @@ int get_button()
     }
 }
 
+
+/**
+  * prints text specifed by begin and end pointers
+  * from line first inclusive to line last exclusive to stream.
+  * Prints each line using print_line and given parameters
+  *
+  * Supports exiting by pressing 'q', accessing next page by pressing space
+  * In no-wrap mode supports left-right scroll using left arrow and right arrow keys
+  */
+
+
+
 int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream, char num, char wrap)
 {
     size_t cur;
     line* l;
     int err;
-    l = _find_line(begin, end, first);
+    l = find_line(begin, end, first);
     if(l == NULL)
         return E_LNRNG;
     if(!isatty(fileno(stream)))
@@ -919,12 +1099,12 @@ int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream,
             while(tmp > 0)
                 tmp /= 10, ++nlen;
             for(cur = first; cur < last; ++cur, l = l->next)
-                if((err = _print_line(l, M_NUM, -1, 0, stream, nlen, cur)))
+                if((err = print_line(l, M_NUM, -1, 0, stream, nlen, cur)))
                     return err;
         }
         else
             for(cur = first; cur < last; ++cur, l = l->next)
-                if((err = _print_line(l, 0, -1, 0, stream)))
+                if((err = print_line(l, 0, -1, 0, stream)))
                     return err;
         return 0;
     }
@@ -933,12 +1113,15 @@ int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream,
         struct termios old_term, new_term;
         struct winsize sz;
         size_t height, width, offset = 0, cur_height, old_cur;
-        tcgetattr(0, &old_term);
-        memcpy(&new_term, &old_term, sizeof(struct termios));
-        new_term.c_lflag &= ~ECHO;
-        new_term.c_lflag &= ~ICANON;
-        new_term.c_cc[VMIN] = 1;
-        tcsetattr(0, TCSANOW, &new_term);
+        if(isatty(0))
+        {
+            tcgetattr(0, &old_term);
+            memcpy(&new_term, &old_term, sizeof(struct termios));
+            new_term.c_lflag &= ~ECHO;
+            new_term.c_lflag &= ~ICANON;
+            new_term.c_cc[VMIN] = 1;
+            tcsetattr(0, TCSANOW, &new_term);
+        }
         ioctl(1, TIOCGWINSZ, &sz);
         height = sz.ws_row - 1;
         if(!isatty(0))
@@ -951,7 +1134,7 @@ int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream,
             cur_height = height;
             fwprintf(stream, L"\n");
             cur = old_cur;
-            l = _find_line(begin, end, cur);
+            l = find_line(begin, end, cur);
             if(l == NULL)
             {
                 return E_LNRNG;
@@ -974,9 +1157,10 @@ int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream,
                     }
                     if(wrap)
                     {
-                        if((err = _print_line(l, M_NUM | M_WRAP | M_TAB, width, offset, stream, nlen, cur, &offset, &cur_height)))
+                        if((err = print_line(l, M_NUM | M_WRAP | M_TAB, width, offset, stream, nlen, cur, &offset, &cur_height)))
                         {
-                            tcsetattr(0, TCSANOW, &old_term);
+                            if(isatty(0))
+                                tcsetattr(0, TCSANOW, &old_term);
                             return err;
                         }
                         if(offset == 0)
@@ -987,9 +1171,10 @@ int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream,
                     }
                     else
                     {
-                        if((err = _print_line(l, M_NUM | M_TAB, width, offset, stream, nlen, cur)))
+                        if((err = print_line(l, M_NUM | M_TAB, width, offset, stream, nlen, cur)))
                         {
-                            tcsetattr(0, TCSANOW, &old_term);
+                            if(isatty(0))
+                                tcsetattr(0, TCSANOW, &old_term);
                             return err;
                         }
                         ++cur;
@@ -1010,9 +1195,10 @@ int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream,
                     }
                     if(wrap)
                     {
-                        if((err = _print_line(l, M_WRAP | M_TAB, width, offset, stream, &offset, &cur_height)))
+                        if((err = print_line(l, M_WRAP | M_TAB, width, offset, stream, &offset, &cur_height)))
                         {
-                            tcsetattr(0, TCSANOW, &old_term);
+                            if(isatty(0))
+                                tcsetattr(0, TCSANOW, &old_term);
                             return err;
                         }
                         if(offset == 0)
@@ -1023,9 +1209,10 @@ int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream,
                     }
                     else
                     {
-                        if((err = _print_line(l, M_TAB, width, offset, stream)))
+                        if((err = print_line(l, M_TAB, width, offset, stream)))
                         {
-                            tcsetattr(0, TCSANOW, &old_term);
+                            if(isatty(0))
+                                tcsetattr(0, TCSANOW, &old_term);
                             return err;
                         }
                         ++cur;
@@ -1034,7 +1221,7 @@ int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream,
                     }
                 }
             }
-            if(isatty(fileno(stdin)))
+            if(isatty(0))
             {
                 fwprintf(stream, L"\033[30;47m Выход: q, След. страница: SPACE");
                 if(!wrap)
@@ -1097,7 +1284,6 @@ int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream,
                 }
                 else
                 {
-                    tcsetattr(0, TCSANOW, &old_term);
                     fwprintf(stream, L"\n");
                     return 0;
                 }
@@ -1108,6 +1294,17 @@ int print_pages(line* begin, line* end, size_t first, size_t last, FILE* stream,
 }
 
 
+/**
+  * returns code of command specified by user
+  * uses get_sentence function to retrieve user's input
+  * and parses it using get_ commands
+  *
+  * In case of success, command's arguments are still stored in buf
+  * Current cursor position is stored in cur
+  *
+  * If command is wrong, nothing is stored and E_C_WRNG is returned
+  */
+
 int get_command(wchar_t** buf, wchar_t** cur)
 {
     wchar_t w1[MAXWORD], w2[MAXWORD];
@@ -1115,7 +1312,7 @@ int get_command(wchar_t** buf, wchar_t** cur)
     int ret = 0;
     if(isatty(0))
         fputws(L"editor: ", stdout);
-    if((err = _get_sentence(buf)))
+    if((err = get_sentence(buf)))
     {
         if(err == E_COMM || err == E_EMPTY)
         {
@@ -1192,6 +1389,13 @@ int get_command(wchar_t** buf, wchar_t** cur)
     return ret;
 }
 
+
+/**
+  * Reads text from file specified by stream
+  * and append it do the end of text specified by end pointer
+  * Total number of lines is put at address total
+  */
+
 int c_read(line* end, FILE* stream, size_t* total)
 {
     size_t add;
@@ -1212,7 +1416,7 @@ int c_read(line* end, FILE* stream, size_t* total)
         {
             if(len + 1 == buf)
             {
-                buf = _expand_array((void**)&s, buf, sizeof(wchar_t));
+                buf = expand_array((void**)&s, buf, sizeof(wchar_t));
                 if(len + 1 == buf)
                 {
                     free(s);
@@ -1241,6 +1445,11 @@ int c_read(line* end, FILE* stream, size_t* total)
     return 0;
 }
 
+
+/**
+  * prints raw text to file specified by stream
+  */
+
 int c_write(line* begin, line* end, FILE* stream)
 {
     line* cur = begin->next;
@@ -1257,6 +1466,15 @@ int c_write(line* begin, line* end, FILE* stream)
     fclose(stream);
     return 0;
 }
+
+/**
+  * Following group of functions invokes commands
+  * recognized by get_command.
+  * They parse arguments from buffer using get_ functions and
+  * invoke them after checking all arguments
+  */
+
+
 
 int inv_set_tabwidth(wchar_t** cur)
 {
@@ -1338,7 +1556,7 @@ int inv_insert_after(wchar_t** cur,
         ln = *len;
     if((err = get_triple_quoted_string(cur, &s)))
         return err;
-    l = _find_line(begin, end, ln);
+    l = find_line(begin, end, ln);
     if(l == NULL)
         return E_LNRNG;
     if((err = insert_after(l, s, &total)))
@@ -1361,7 +1579,7 @@ int inv_edit_string(wchar_t** cur, line* begin, line* end, int mode)
     --pos;
     if((err = get_symb(cur, &c, 1)))
         return err;
-    l = _find_line(begin, end, ln);
+    l = find_line(begin, end, ln);
     if(l == end)
         return E_LNRNG;
     if((err = (mode == M_INSERT ? insert_symbol(l, pos, c) : edit_string(l, pos, c))))
@@ -1369,7 +1587,7 @@ int inv_edit_string(wchar_t** cur, line* begin, line* end, int mode)
     return 0;
 }
 
-int inv_replace_substring(wchar_t** cur, line* begin, line* end, size_t* len)
+int invline_replace_substring(wchar_t** cur, line* begin, line* end, size_t* len)
 {
     int err;
     wchar_t *sample, *repl;
@@ -1439,8 +1657,8 @@ int inv_exit(line* begin, line* end, char* path, wchar_t* buf, char change)
     if(change)
         return E_NOTSAV;
     delete_range(begin, end, 1, -1, &trash);
-    __line_destroy(begin);
-    __line_destroy(end);
+    line_struct_line_destroy(begin);
+    line_struct_line_destroy(end);
     if(path != NULL)
         free(path);
     if(buf != NULL)
@@ -1586,6 +1804,13 @@ int inv_set_name(wchar_t** cur, char** path)
     return 0;
 }
 
+
+/**
+  * Recieves error code and prints error message to stderr stream
+  * Recieved error code is returned
+  */
+
+
 int printerr(int err)
 {
     switch(err)
@@ -1634,8 +1859,8 @@ int main(int argc, const char *argv[])
     setlocale(LC_ALL, "ru_RU.utf8");
     begin = calloc(1, sizeof(line));
     end = calloc(1, sizeof(line));
-    __line_init(begin);
-    __line_init(end);
+    line_struct_line_init(begin);
+    line_struct_line_init(end);
     begin->next = end;
     end->prev = begin;
 
@@ -1701,7 +1926,7 @@ int main(int argc, const char *argv[])
             change = 1;
             break;
         case C_REPL_S:
-            printerr(inv_replace_substring(&cur, begin, end, &len));
+            printerr(invline_replace_substring(&cur, begin, end, &len));
             change = 1;
             break;
         case C_DELETE_R:
