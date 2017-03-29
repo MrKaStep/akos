@@ -487,10 +487,10 @@ int _get_sentence(wchar_t** _buf)
         return E_MALLOC;
     while((c = fgetwc(stdin)) != WEOF && (c != L'\n' || quotes_flag))
     {
-        if(len == buf)
+        if(len + 1 == buf)
         {
             buf = _expand_array((void**)&s, buf, sizeof(wchar_t));
-            if(buf == len)
+            if(len + 1 == buf)
             {
                 free(s);
                 *_buf = NULL;
@@ -1213,7 +1213,7 @@ int c_read(line* end, FILE* stream, size_t* total)
             if(len + 1 == buf)
             {
                 buf = _expand_array((void**)&s, buf, sizeof(wchar_t));
-                if(len == buf)
+                if(len + 1 == buf)
                 {
                     free(s);
                     fclose(stream);
