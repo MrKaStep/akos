@@ -464,6 +464,7 @@ int _replace_substring(line *l, const wchar_t *sample, const wchar_t *repl, size
             ++wi;
         }
     }
+    free(z);
     free(l->s);
     l->s = buf;
     l->buf = nbuf;
@@ -492,6 +493,7 @@ int _get_sentence(wchar_t** _buf)
             if(buf == len)
             {
                 free(s);
+                *_buf = NULL;
                 return E_MALLOC;
             }
         }
@@ -507,6 +509,8 @@ int _get_sentence(wchar_t** _buf)
     }
     if(c == WEOF)
     {
+        free(s);
+        *_buf = NULL;
         return E_EOF;
     }
     s[len] = L'\0';
@@ -516,11 +520,13 @@ int _get_sentence(wchar_t** _buf)
     if(*s == '#')
     {
         free(*_buf);
+        *_buf = NULL;
         return E_COMM;
     }
     else if(s == *_buf + len)
     {
         free(*_buf);
+        *_buf = NULL;
         return E_EMPTY;
     }
     return 0;
@@ -1435,8 +1441,10 @@ int inv_exit(line* begin, line* end, char* path, wchar_t* buf, char change)
     delete_range(begin, end, 1, -1, &trash);
     __line_destroy(begin);
     __line_destroy(end);
-    free(path);
-    free(buf);
+    if(path != NULL)
+        free(path);
+    if(buf != NULL)
+        free(buf);
     exit(0);
 }
 
@@ -1470,6 +1478,8 @@ int inv_read(wchar_t** cur, line* end, size_t* len)
         free(pc);
         return err;
     }
+    free(p);
+    free(pc);
     return 0;
 }
 
@@ -1508,6 +1518,8 @@ int inv_open(wchar_t** cur, line* end, size_t* len, char** path)
         free(pc);
         return err;
     }
+    free(p);
+    free(pc);
     return 0;
 }
 
@@ -1570,6 +1582,7 @@ int inv_set_name(wchar_t** cur, char** path)
     l = wcstombs(NULL, p, 0);
     *path = calloc(1, l + 1);
     wcstombs(*path, p, l + 1);
+    free(p);
     return 0;
 }
 
@@ -1615,7 +1628,7 @@ int printerr(int err)
 int main(int argc, const char *argv[])
 {
     line *begin, *end;
-    char *path;
+    char *path = NULL;
     size_t len = 0;
     char change = 0, wrap = 1, num = 1;
     setlocale(LC_ALL, "ru_RU.utf8");
@@ -1625,7 +1638,6 @@ int main(int argc, const char *argv[])
     __line_init(end);
     begin->next = end;
     end->prev = begin;
-
 
     if(argc > 1)
     {
