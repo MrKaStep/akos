@@ -1,3 +1,8 @@
+/**
+  * This header contains definition of "class" for a single line
+  * entry in bidirectional list
+  */
+
 #ifndef EDITOR_LINE_H
 #define EDITOR_LINE_H
 
@@ -22,23 +27,9 @@ typedef struct lines line;
 
 size_t pw2(size_t a);
 
-/**
-  * basic line constructor
-  */
-
 int line_struct_line_init(line *l);
 
-
-/**
-  * constructs line from string
-  */
-
 int line_struct_line_init_str(line *l, const wchar_t *s, int len);
-
-
-/**
-  * destroys line, deallocating memory for string and for structure itself
-  */
 
 void line_struct_line_destroy(line *l);
 

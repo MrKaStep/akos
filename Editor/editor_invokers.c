@@ -3,8 +3,6 @@
 #include "editor_getters.h"
 #include "editor_routines.h"
 
-
-
 int inv_set_tabwidth(wchar_t** cur)
 {
     int err;

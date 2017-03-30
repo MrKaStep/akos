@@ -1,3 +1,13 @@
+/**
+  * This header contains definitions for input proccessing
+  * functions. These functions are used by invokers, and
+  * main function.
+  *
+  * Command parser included as well
+  */
+
+
+
 #ifndef EDITOR_GETTERS_H
 #define EDITOR_GETTERS_H
 
@@ -39,70 +49,19 @@
 
 #define MAXWORD 15
 
-/**
-  * gets command specified by user and puts it at _buf address
-  * if no triple quotes met, reads to the end-of-line
-  * otherwise, reads to the end of line containing closing triple quotes
-  */
-
 int get_sentence(wchar_t** _buf);
-
-
-/**
-  * reads next word (sequence of letters) from string specified by _buf
-  * and puts it at address s
-  * If first non-space symbol is not a letter, returns E_C_WRNG
-  * If word length is greater than MAXWORD, returns E_C_WRNG
-  */
 
 wchar_t spec_symb(wchar_t symb);
 
 int get_word(wchar_t **_buf, wchar_t* s);
 
-
-/**
-  * reads next single-quoted string (sequence of symbols between nearest and farthest quotes)
-  * from string specified by _buf and puts it at address *s
-  * If first non-space symbol is not a quote, returns E_NOARG
-  */
-
 int get_quoted_string(wchar_t** _buf, wchar_t** s);
-
-
-
-/**
-  * reads triple quoted string or, if only quoted string specified,
-  * reads quoted string from _buf
-  */
 
 int get_triple_quoted_string(wchar_t** _buf, wchar_t** s);
 
-
-
-/**
-  * reads next integer from _buf
-  * If first non-space symbol is not a digit, return E_NOARG
-  */
-
-
 int get_int(wchar_t **_buf, size_t* a);
 
-
-
-/**
-  * reads next non-space symbol from _buf
-  * If symbol is preceded by backslash it is treated as if it was single special symbol
-  */
-
 int get_symb(wchar_t **buf, wchar_t* c, char spec);
-
-
-
-/**
-  * returns last pressed button for print pages mode
-  * If it is necessary for this mode, appropriate code is returned
-  * Otherwise, B_ANY is returned
-  */
 
 int get_button();
 

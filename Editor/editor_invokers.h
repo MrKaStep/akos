@@ -1,3 +1,10 @@
+/**
+  * Following group of functions invokes commands
+  * recognized by get_command.
+  * They parse arguments from buffer using get_ functions and
+  * invoke them after checking all arguments
+  */
+
 #ifndef EDITOR_INVOKERS_H
 #define EDITOR_INVOKERS_H
 
@@ -5,12 +12,6 @@
 #define _XOPEN_SOURCE 1000
 #endif /*_XOPEN_SOURCE*/
 
-/**
-  * Following group of functions invokes commands
-  * recognized by get_command.
-  * They parse arguments from buffer using get_ functions and
-  * invoke them after checking all arguments
-  */
 
 #include <stdio.h>
 #include <wchar.h>
