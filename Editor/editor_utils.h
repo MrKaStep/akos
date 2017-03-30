@@ -38,7 +38,7 @@ size_t expand_array(void **s, size_t len, size_t item);
 
 wchar_t wcscat_at(const wchar_t *str1, size_t len1, const wchar_t *str2, size_t pos);
 
-int _z_function(size_t **z, const wchar_t *str1, size_t len1, const wchar_t *str2, size_t len2);
+int wcscat_z_function(size_t **z, const wchar_t *str1, size_t len1, const wchar_t *str2, size_t len2);
 
 int resize_line(line *l);
 

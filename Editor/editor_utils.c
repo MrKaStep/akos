@@ -42,7 +42,7 @@ wchar_t wcscat_at(const wchar_t *str1, size_t len1, const wchar_t *str2, size_t 
   * calculates z-function for concatenation of str1, null-symbol and str2
   */
 
-int _z_function(size_t **z, const wchar_t *str1, size_t len1, const wchar_t *str2, size_t len2)
+int wcscat_z_function(size_t **z, const wchar_t *str1, size_t len1, const wchar_t *str2, size_t len2)
 {
     size_t l = 0, r = 0, i;
     size_t len = len1 + len2 + 1;
@@ -361,7 +361,7 @@ int line_replace_substring(line *l, const wchar_t *sample, const wchar_t *repl, 
     }
 
 
-    _z_function(&z, sample, slen, l->s, l->len);
+    wcscat_z_function(&z, sample, slen, l->s, l->len);
 
     for (i = 0; i < l->len;)
     {
