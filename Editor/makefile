@@ -1,6 +1,6 @@
 CUR_DIR = $(shell pwd)
 OBJS = $(patsubst %.c, %.o, $(wildcard *.c))
-FROMS = $(patsubst %.c, %.form, $(wildcard *.c))
+FORMS = $(patsubst %.c, %.form, $(wildcard *.c))
 
 editor: $(OBJS)
 	gcc -o editor $^
@@ -13,10 +13,7 @@ editor: $(OBJS)
 %.form: %.c
 	astyle --style=ansi $(CUR_DIR)/$<
 
-format: $(FROMS)
-
-tests:
-	valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all ./editor < test1
+format: $(FORMS)
 
 clean:
 	rm -f *.c.orig *.o editor
