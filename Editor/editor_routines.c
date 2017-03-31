@@ -81,7 +81,7 @@ int delete_range(line *begin, line *end, size_t first, size_t last, size_t *tota
     for (i = 0; i < first - 1 && cur != end; ++i)
         cur = cur->next;
     for (; i < last - 1 && cur->next != end; ++i)
-        _delete_line(cur->next), ++*total;
+        internal_delete_line(cur->next), ++*total;
     return 0;
 }
 

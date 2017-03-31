@@ -153,7 +153,7 @@ int refine_line(line *l, size_t* total)
   * deletes line from text
   */
 
-void _delete_line(line *l)
+void internal_delete_line(line *l)
 {
     l->next->prev = l->prev;
     l->prev->next = l->next;
@@ -176,7 +176,7 @@ int merge_lines(line *left, line *right, size_t rstart, size_t *add)
     while(left->next != right)
     {
         ++*add;
-        _delete_line(left->next);
+        internal_delete_line(left->next);
     }
     if (s == NULL)
         return E_MALLOC;

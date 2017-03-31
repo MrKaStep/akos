@@ -44,7 +44,7 @@ int resize_line(line *l);
 
 int refine_line(line *l, size_t* total);
 
-void _delete_line(line *l);
+void internal_delete_line(line *l);
 
 int merge_lines(line *left, line *right, size_t rstart, size_t *add);
 
