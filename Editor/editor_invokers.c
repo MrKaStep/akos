@@ -330,3 +330,35 @@ int inv_set_name(wchar_t** cur, char** path)
     free(p);
     return 0;
 }
+
+int inv_help()
+{
+    line *begin, *end;
+    size_t len;
+    FILE* f;
+    int err = 0;
+    begin = calloc(1, sizeof(line));
+    end = calloc(1, sizeof(line));
+    line_struct_line_init(begin);
+    line_struct_line_init(end);
+    end->prev = begin;
+    begin->next = end;
+    f = fopen(".help", "r");
+    if(f == NULL)
+    {
+        free(begin);
+        free(end);
+        return E_IOFAIL;
+    }
+    if((err = c_read(end, f, &len)))
+    {
+        free(begin);
+        free(end);
+        return err;
+    }
+    err = print_pages(begin, end, 1, len + 1, stdout, 0, 0);
+    delete_range(begin, end, 1, len + 1,&len);
+    line_struct_line_destroy(begin);
+    line_struct_line_destroy(end);
+    return err;
+}

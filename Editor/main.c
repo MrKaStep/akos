@@ -125,6 +125,7 @@ int main(int argc, const char *argv[])
             printerr(inv_set_name(&cur, &path));
             break;
         case C_HELP:
+            printerr(inv_help());
             break;
         }
         free(buf);

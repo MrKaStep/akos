@@ -71,4 +71,6 @@ int inv_write(wchar_t** cur, line* begin, line* end, char* path);
 
 int inv_set_name(wchar_t** cur, char** path);
 
+int inv_help();
+
 #endif /*EDITOR_INVOKERS_H*/
