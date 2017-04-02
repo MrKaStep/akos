@@ -334,8 +334,8 @@ int inv_set_name(wchar_t** cur, char** path)
 int inv_help()
 {
     line *begin, *end;
-    size_t len;
-    FILE* f;
+    wchar_t buf[1024];
+    size_t len = 0;
     int err = 0;
     begin = calloc(1, sizeof(line));
     end = calloc(1, sizeof(line));
@@ -343,14 +343,10 @@ int inv_help()
     line_struct_line_init(end);
     end->prev = begin;
     begin->next = end;
-    f = fopen(".help", "r");
-    if(f == NULL)
-    {
-        free(begin);
-        free(end);
-        return E_IOFAIL;
-    }
-    if((err = c_read(end, f, &len)))
+    len += swprintf(buf + len, 1024 - len, L"Here's the link to all commands:\n\n");
+    len += swprintf(buf + len, 1024 - len, L"https://drive.google.com/file/d/0B5QEwLj9T1KDLUVzWERvdnZGa3dHbmVjb29nOHIxN3djbVpF/view?usp=sharing\n\n");
+    len += swprintf(buf + len, 1024 - len, L"Send your questions to my e-mail: kalinin.sa@phystech.edu\n");
+    if((err = insert_after(begin, buf, &len)))
     {
         free(begin);
         free(end);

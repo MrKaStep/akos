@@ -27,7 +27,7 @@ int line_struct_line_init(line *l)
     l->s = calloc(1, sizeof(wchar_t));
     if (l->s == NULL)
         return E_MALLOC;
-    l->s[0] = 0;
+    l->s[0] = L'\0';
     l->len = 0;
     l->buf = 1;
     l->prev = l->next = NULL;

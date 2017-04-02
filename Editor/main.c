@@ -24,7 +24,7 @@ int main(int argc, const char *argv[])
     char *path = NULL;
     size_t len = 0;
     char change = 0, wrap = 1, num = 1;
-    setlocale(LC_ALL, "ru_RU.utf8");
+    setlocale(LC_ALL, "");
     begin = calloc(1, sizeof(line));
     end = calloc(1, sizeof(line));
     line_struct_line_init(begin);
@@ -61,6 +61,7 @@ int main(int argc, const char *argv[])
         switch(cmd)
         {
         case E_EOF:
+            printerr(E_EOF);
             inv_exit(begin, end, path, buf, 0);
             break;
         case E_C_WRNG:

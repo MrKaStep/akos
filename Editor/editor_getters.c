@@ -78,10 +78,6 @@ wchar_t spec_symb(wchar_t symb)
         return L'\t';
     case L'r':
         return L'\r';
-    case L'\\':
-        return L'\\';
-    case L'\"':
-        return L'\"';
     default:
         return symb;
     }
@@ -354,8 +350,10 @@ int get_command(wchar_t** buf, wchar_t** cur)
         ret = C_WRITE;
     else if(wcscmp(w1, L"help") == 0)
         ret = C_HELP;
+
     if(ret != 0)
         return ret;
+
     if((err = get_word(cur, w2)))
         return E_C_WRNG;
     if(wcscmp(w1, L"set") == 0)

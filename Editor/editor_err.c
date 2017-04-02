@@ -39,8 +39,11 @@ int printerr(int err)
     case E_NOTSAV:
         wprintf(L"File not saved. Use %sexit force%s to exit anyway.\n", RED, RESET);
         break;
+    case E_EOF:
+        fwprintf(stderr, L"End of input reached. Terminating process.\n");
+        break;
     default:
-        fwprintf(stderr, L"What the...");
+        fwprintf(stderr, L"What the...\n");
     }
     return err;
 }
