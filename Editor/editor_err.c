@@ -13,37 +13,37 @@ int printerr(int err)
     case 0:
         break;
     case E_STRRNG:
-        fwprintf(stderr, L"Incorrect symbol position\n");
+        fwprintf(stderr, L"\tIncorrect symbol position\n");
         break;
     case E_MALLOC:
-        fwprintf(stderr, L"Not enough memory\n");
+        fwprintf(stderr, L"\tNot enough memory\n");
         break;
     case E_LNRNG:
-        fwprintf(stderr, L"Incorrect line number\n");
+        fwprintf(stderr, L"\tIncorrect line number\n");
         break;
     case E_C_WRNG:
-        fwprintf(stderr, L"Incorrect command\n");
+        fwprintf(stderr, L"\tIncorrect command\n");
         break;
     case E_NOARG:
-        fwprintf(stderr, L"Missing or invalid arguments\n");
+        fwprintf(stderr, L"\tMissing or invalid arguments\n");
         break;
     case E_NARROW:
-        fwprintf(stderr, L"Treminal\'s width not enough\n");
+        fwprintf(stderr, L"\tTreminal\'s width not enough\n");
         break;
     case E_IOFAIL:
-        fwprintf(stderr, L"Input/output error has occured\n");
+        fwprintf(stderr, L"\tInput/output error has occured\n");
         break;
     case E_NOFILE:
-        fwprintf(stderr, L"No file specified\n");
+        fwprintf(stderr, L"\tNo file specified\n");
         break;
     case E_NOTSAV:
-        wprintf(L"File not saved. Use %sexit force%s to exit anyway.\n", RED, RESET);
+        wprintf(L"\tFile not saved. Use %sexit force%s to exit anyway.\n", RED, RESET);
         break;
     case E_EOF:
-        fwprintf(stderr, L"End of input reached. Terminating process.\n");
+        fwprintf(stderr, L"\tEnd of input reached. Terminating process.\n");
         break;
     default:
-        fwprintf(stderr, L"What the...\n");
+        fwprintf(stderr, L"\tWhat the...\n");
     }
     return err;
 }
