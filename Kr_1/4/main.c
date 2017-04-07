@@ -146,6 +146,7 @@ int main(int argc, char* argv[])
         }
         if(WEXITSTATUS(status) != 0)
         {
+            fprintf(stderr, "Process failed\n");
             return 0;
         }
     }
