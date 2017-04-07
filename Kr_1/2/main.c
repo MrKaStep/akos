@@ -107,6 +107,11 @@ int main()
         int64_t a;
         if(get_int(&a) == E_OK)
             upd_ans(a);
+        else
+        {
+            fprintf(stderr, "\tIncorrect input\n");
+            break;
+        }
     }
     return 0;
 }
