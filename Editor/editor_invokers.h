@@ -20,6 +20,7 @@
 #include "editor_err.h"
 #include "editor_utils.h"
 #include "editor_routines.h"
+#include "editor_getters.h"
 
 extern size_t tab_width;
 
