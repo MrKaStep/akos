@@ -22,7 +22,6 @@ void move_bits(long* a, int p_left, int p_right, int move_size)
     *a &= ~(mask_left | mask_right);
     *a |= (n_left >> (p_right - p_left));
     *a |= (n_right << (p_right - p_left));
-    printf("%ld %ld %ld %ld\n", n_left, n_right, mask_left, mask_right);
 }
 
 void print_2(long a)
