@@ -40,7 +40,7 @@ int main(int argc, const char* argv[])
     int fd;
     long a, mn = LONG_MAX;
     unsigned char zero = 0;
-    char s[16];
+    char s[1024];
     if (argc != 5)
     {
         fprintf(stderr, "\tIncorrect number of arguments\n");
@@ -60,7 +60,7 @@ int main(int argc, const char* argv[])
         perror("File open failed");
         return E_OPEN;
     }
-    while(fgets(s, 15, stdin) != NULL)
+    while(fgets(s, 1023, stdin) != NULL)
     {
         a = strtol(s, NULL, 16);
         print_2(a);
