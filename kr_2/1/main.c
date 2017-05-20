@@ -84,7 +84,7 @@ int main(int argc, const char* argv[])
         }
     }
     lseek(fd, mn, SEEK_SET);
-    write(fd, zero, 1);
+    write(fd, &zero, 1);
     close(fd);
     return 0;
 }
