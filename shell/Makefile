@@ -3,11 +3,11 @@ OBJS = $(patsubst %.c, %.o, $(wildcard *.c))
 FORMS = $(patsubst %.c, %.form, $(wildcard *.c))
 
 my_shell: $(OBJS)
-	gcc -o editor $^
+	gcc -o my_shell $^
 
 %.o: %.c
 	gcc -std=c89 -Wall -Wextra -ansi -pedantic -c $<
-	astyle --style=ansi $(CUR_DIR)/$<
+	astyle --style=stroustrup $(CUR_DIR)/$<
 
 
 %.form: %.c
@@ -16,4 +16,4 @@ my_shell: $(OBJS)
 format: $(FORMS)
 
 clean:
-	rm -f *.c.orig *.o editor
+	rm -f *.c.orig *.o my_shell
