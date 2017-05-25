@@ -19,7 +19,7 @@ long get_time_in_ns()
 {
     struct timespec t;
     clock_gettime(CLOCK_REALTIME, &t);
-    return t.tv_sec - ns + 1000000000l * (t.tv_sec - s);
+    return t.tv_nsec - ns + 1000000000l * (t.tv_sec - s);
 }
 
 void swap(int* a, int* b)
