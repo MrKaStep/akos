@@ -21,15 +21,19 @@ extern char* hostname;
 extern char* home_dir;
 extern char cur_path[PATH_MAX];
 
+char* buf;
+char* cur;
+size_t buf_size;
+
 void invite_user();
 
-int get_command(char** buf);
+int get_command();
 
-void skip_spaces(char** buf);
+void skip_spaces();
 
-int get_token(char** cur, char** dest);
+int get_token(char** dest);
 
-int get_program(program* p);
+int get_program(program** p);
 
 int get_job(job** j);
 #endif /*GETTERS_H*/

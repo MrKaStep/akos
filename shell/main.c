@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-
+#include "core.h"
 
 
 
@@ -15,6 +15,7 @@
 
 int main(int argc, const char* argv[])
 {
-    
+    init();
+    get_command();
     return 0;
 }
