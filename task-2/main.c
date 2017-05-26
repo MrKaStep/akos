@@ -5,59 +5,256 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 
 
-#define E_UNKNWN 1000
-#define E_NOARG  1001
-#define E_NOTDIR 1002
-#define E_MALLOC 1003
-#define E_BADMD  1004
-#define E_ACCES  1005
+#define E_OK     0
+#define E_LSTAT  1
+#define E_READ   2
+#define E_WRITE  3
+#define E_ARGS   4
+#define E_MALLOC 5
 
-
-#define USE_STAT  256
-#define USE_LSTAT 257
-
-int is_dir(const char* path, int mode)
+struct Node_s
 {
-    struct stat st;
-    switch(mode)
+    struct Node_s* left;
+    struct Node_s* right;
+    int prior;
+    ino_t key;
+};
+
+typedef struct Node_s Node;
+
+void split(Node* root, Node** left, Node** right, ino_t key)
+{
+    if(root == NULL)
     {
-    case USE_STAT:
-        stat(path, &st);
-        break;
-    case USE_LSTAT:
-        lstat(path, &st);
-        break;
-    default:
-        return E_BADMD;
+        *left = *right = NULL;
+        return;
     }
-    return (int)S_ISDIR(st.st_mode);
+    if(root->key < key)
+    {
+        split(root->right, &(root->right), right, key);
+        *left = root;
+    }
+    else {
+        split(root->left, left, &(root->left), key);
+        *right = root;
+    }
 }
 
-int is_link(const char* path, int mode)
+void merge(Node* left, Node* right, Node** root)
 {
-    struct stat st;
-    switch(mode)
+    if(left == NULL)
     {
-    case USE_STAT:
-        stat(path, &st);
-        break;
-    case USE_LSTAT:
-        lstat(path, &st);
-        break;
-    default:
-        return E_BADMD;
+        *root = right;
+        return;
     }
-    return (int)S_ISLNK(st.st_mode);
+    if(right == NULL)
+    {
+        *root = left;
+        return;
+    }
+    if(left->prior < right->prior)
+    {
+        merge(left->right, right, &(left->right));
+        *root = left;
+    }
+    else
+    {
+        merge(left, right->left, &(right->left));
+        *root = right;
+    }
 }
 
+void insert(Node** root, Node* v)
+{
+    if(*root == NULL)
+    {
+        *root = v;
+        return;
+    }
+    if(v->prior < (*root)->prior)
+    {
+        split(*root, &(v->left), &(v->right), v->key);
+        *root = v;
+        return;
+    }
+    if((*root)->key < v->key)
+    {
+        insert(&((*root)->right), v);
+    }
+    else
+    {
+        insert(&((*root)->left), v);
+    }
+}
 
-int copy(const char* source, const char* dest);
+int find(Node* root, ino_t key)
+{
+    if(root == NULL)
+    {
+        return 0;
+    }
+    if(root->key == key)
+    {
+        return 1;
+    }
+    if(key < root->key)
+    {
+        return find(root->left, key);
+    }
+    return find(root->right, key);
+}
+
+void init_node(Node* v, ino_t key)
+{
+    v->left = v->right = NULL;
+    v->key = key;
+    v->prior = rand();
+}
+
+Node* tree_root = NULL;
+
+int copy_regular(char* from, char* dest)
+{
+    int s, t;
+    char* buf = malloc(4096);
+    int sz;
+    if(buf == NULL)
+    {
+        return E_MALLOC;
+    }
+    s = open(from, O_RDONLY);
+    if(s == -1)
+    {
+        perror("Regular file read failed");
+        free(buf);
+        return E_READ;
+    }
+    t = open(dest, O_WRONLY | O_CREAT);
+    if(t == -1)
+    {
+        perror("Regular file write failed");
+        free(buf);
+        close(s);
+        return E_WRITE;
+    }
+    while((sz = read(s, buf, 4096)) != 0)
+    {
+        int written = 0;
+        if(sz == -1)
+        {
+            free(buf);
+            perror("Regular file read failed");
+            return E_READ;
+        }
+        while(written != sz)
+        {
+            int add;
+            add = write(t, buf + written, sz - written);
+            if(add == -1)
+            {
+                free(buf);
+                close(s);
+                close(t);
+                perror("Regular file write failed");
+                return E_WRITE;
+            }
+            written += add;
+        }
+    }
+    close(s);
+    close(t);
+    return E_OK;
+}
+
+int copy_symlink(char* from, char* dest)
+{
+    char buf[PATH_MAX];
+    if(readlink(from, buf, PATH_MAX * sizeof(char)) == -1)
+    {
+        perror("Symbolic link read failed");
+        return E_READ;
+    }
+    if(symlink(buf, dest) == -1)
+    {
+        perror("Symbolic link create failed");
+        return E_WRITE;
+    }
+    return E_OK;
+}
+
+int copy(char* from, char* dest);
+
+int copy_dir(char* from, char* dest)
+{
+    DIR* s;
+    struct stat from_s, dest_s;
+    struct dirent* e;
+    int dest_l = strlen(dest);
+    int from_l = strlen(from);
+    Node* v;
+    s = opendir(from);
+    if(s == NULL)
+    {
+        perror("Directory open failed");
+        return E_READ;
+    }
+    if(lstat(from, &from_s) == -1)
+    {
+        closedir(s);
+        perror("Directory stat failed");
+        return E_LSTAT;
+    }
+    if(mkdir(dest, from_s.st_mode) == -1)
+    {
+        closedir(s);
+        perror("Directory create failed");
+        return E_WRITE;
+    }
+    if(lstat(dest, &dest_s) == -1)
+    {
+        closedir(s);
+        perror("Directory stat failed");
+        return E_LSTAT;
+    }
+    v = malloc(sizeof(Node));
+    if(v == NULL)
+    {
+        return E_MALLOC;
+    }
+    init_node(v, dest_s.st_ino);
+    insert(&tree_root, v);
+    while((e = readdir(s)) != NULL)
+    {
+        int err;
+        if(strcmp(".", e->d_name) == 0 || strcmp("..", e->d_name) == 0)
+            continue;
+        from[from_l] = '/';
+        dest[dest_l] = '/';
+        strcpy(from + from_l + 1, e->d_name);
+        strcpy(dest + dest_l + 1, e->d_name);
+        if(err = copy(from, dest))
+        {
+            closedir(s);
+            return err;
+        }
+        from[from_l] = '\0';
+        dest[dest_l] = '\0';
+    }
+    closedir(s);
+    return E_OK;
+}
+
+int copy_fifo(char* from, char* dest)
+{
+    
+}
 
 void copy_mode(const char* source, const char* dest)
 {
@@ -66,162 +263,55 @@ void copy_mode(const char* source, const char* dest)
     chmod(dest, st.st_mode);
 }
 
-int copy_dir(const char* source, const char* dest)
+int copy(char* from, char* dest)
 {
-    DIR* d;
-    DIR* s;
-    struct dirent *f;
-    int dl;
-    int sl;
-    char* new_s;
-    char* new_d;
-    mkdir(dest, 0777);
-    if(!is_dir(dest, USE_LSTAT))
+    struct stat s, t;
+    int err;
+    if(lstat(from, &s) == -1)
     {
-        return E_NOTDIR;
+        puts(from);
+        puts(dest);
+        perror("Lstat call failed");
+        return E_LSTAT;
     }
-    d = opendir(dest);
-    if(d == NULL)
-        if(errno == EACCES)
-            return E_ACCES;
-        else
-            return E_UNKNWN;
-    s = opendir(source);
-    if(s == NULL)
-        if(errno == EACCES)
-            return E_ACCES;
-        else
-            return E_UNKNWN;
-    copy_mode(source, dest);
-    dl = strlen(dest);
-    sl = strlen(source);
-    new_s = malloc((257 + sl) * sizeof(char));
-    if(new_s == NULL)
-        return E_MALLOC;
-    new_d = malloc((257 + dl) * sizeof(char));
-    if(new_d == NULL)
-        return E_MALLOC;
-    strcpy(new_s, source);
-    strcpy(new_d, dest);
-    while((f = readdir(d)) != NULL)
+    if(find(tree_root, s.st_ino))
     {
-        int ret;
-        sprintf(new_s + sl, "/%s", f->d_name);
-        sprintf(new_d + dl, "/%s", f->d_name);
-        if((ret = copy(new_s, new_d)) != 0 )
-        {
-            free(new_s);
-            free(new_d);
-            return ret;
-        }
+        return E_OK;
     }
-    closedir(d);
-    closedir(s);
-    free(new_s);
-    free(new_d);
-    return 0;
+    if(S_ISREG(s.st_mode))
+        err = copy_regular(from, dest);
+    else if(S_ISDIR(s.st_mode))
+        err = copy_dir(from, dest);
+    else if(S_ISLNK(s.st_mode))
+        err = copy_symlink(from, dest);
+    else if(S_ISFIFO(s.st_mode))
+        err = copy_fifo(from, dest);
+    if(err)
+    {
+        return err;
+    }
+    copy_mode(from, dest);
+    if(lstat(dest, &t) == -1)
+    {
+        perror("New file stat failed");
+        return E_LSTAT;
+    }
+    return E_OK;
 }
 
-int copy_file(const char* source, const char* dest)
-{
-    FILE* s;
-    FILE* d;
-    d = fopen(dest, "wb");
-    if(d == NULL)
-        if(errno == EACCES)
-            return E_ACCES;
-        else
-            return E_UNKNWN;
-    s = fopen(source, "rb");
-    if(s == NULL)
-        if(errno == EACCES)
-            return E_ACCES;
-        else
-            return E_UNKNWN;
-    void* buf = malloc(8);
-    while(!feof(s))
-    {
-        int n = fread(buf, 1, 8, s);
-        fwrite(buf, 1, n, d);
-    }
-    copy_mode(source, dest);
-    free(buf);
-    fclose(s);
-    fclose(d);
-    return 0;
-}
 
-int copy_link(const char* source, const char* dest)
-{
-    char* path = malloc(PATH_MAX * sizeof(char));
-    int t;
-    if(readlink(source, path, PATH_MAX), t = errno)
-    {
-        printf("read %d\n", t);
-        if(errno == EACCES)
-            return E_ACCES;
-        if(errno == ENOTDIR)
-            return E_NOTDIR;
-        return E_UNKNWN;
-    }
-    if(symlink(path, dest))
-    {
-        printf("sym %d\n", errno);
-        if(errno == EACCES)
-            return E_ACCES;
-        if(errno == ENOTDIR)
-            return E_NOTDIR;
-        return E_UNKNWN;
-    }
-    copy_mode(source, dest);
-    return 0;
-}
 
-int copy(const char* source, const char* dest)
-{
-	
-    return 0;
-}
-
-int print_err(int err)
-{
-    switch(err)
-    {
-    case 0:
-        return 0;
-    case E_NOARG:
-        fputs("Not enough arguments", stderr);
-        break;
-    case E_NOTDIR:
-        fputs("Given path is not a directory", stderr);
-        break;
-    case E_MALLOC:
-        fputs("Not enough memory", stderr);
-        break;
-    case E_BADMD:
-        fputs("Incorrect mode for is_dir", stderr);
-        break;
-    case E_ACCES:
-        fputs("Permission denied", stderr);
-        break;
-    case E_UNKNWN:
-        fputs("Unknown error", stderr);
-        break;
-    default:
-        fputs("Fucking unknown error", stderr);
-        break;
-    }
-    return err;
-}
 
 int main(int argc, char const *argv[])
 {
-    char* dest;
-
-    if(argc < 3)
+    char from[PATH_MAX + 256], dest[PATH_MAX + 256];
+    if(argc != 3)
     {
-        fputs("Not enough arguments", stderr);
-        return E_NOARG;
+        fprintf(stderr, "\tIncorrect number of argumets: %d, expected 3\n", argc);
+        return E_ARGS;
     }
-    return print_err(copy_link(argv[1], argv[2]));
+    strcpy(from, argv[1]);
+    strcpy(dest, argv[2]);
+    copy(from, dest);
+    return 0;
 }
