@@ -303,6 +303,8 @@ int copy(char* from, char* dest)
         err = copy_symlink(from, dest);
     else if(S_ISFIFO(s.st_mode))
         err = copy_fifo(from, dest);
+    else
+        return E_OK;
     if(err)
     {
         return err;
