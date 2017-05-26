@@ -118,6 +118,15 @@ void init_node(Node* v, ino_t key)
     v->prior = rand();
 }
 
+void destroy_tree(Node* v)
+{
+    if(v == NULL)
+        return;
+    destroy_tree(v->left);
+    destroy_tree(v->right);
+    free(v);
+}
+
 Node* tree_root = NULL;
 
 int copy_regular(char* from, char* dest)
@@ -168,6 +177,7 @@ int copy_regular(char* from, char* dest)
             written += add;
         }
     }
+    free(buf);
     close(s);
     close(t);
     return E_OK;
@@ -239,7 +249,7 @@ int copy_dir(char* from, char* dest)
         dest[dest_l] = '/';
         strcpy(from + from_l + 1, e->d_name);
         strcpy(dest + dest_l + 1, e->d_name);
-        if(err = copy(from, dest))
+        if((err = copy(from, dest)))
         {
             closedir(s);
             return err;
@@ -253,8 +263,15 @@ int copy_dir(char* from, char* dest)
 
 int copy_fifo(char* from, char* dest)
 {
-    
+    if(mkfifo(dest, 0777) == -1)
+    {
+        perror("Create FIFO failed");
+        return E_WRITE;
+    }
+    return E_OK;
 }
+
+
 
 void copy_mode(const char* source, const char* dest)
 {
@@ -305,6 +322,7 @@ int copy(char* from, char* dest)
 int main(int argc, char const *argv[])
 {
     char from[PATH_MAX + 256], dest[PATH_MAX + 256];
+    int from_l, dest_l;
     if(argc != 3)
     {
         fprintf(stderr, "\tIncorrect number of argumets: %d, expected 3\n", argc);
@@ -312,6 +330,17 @@ int main(int argc, char const *argv[])
     }
     strcpy(from, argv[1]);
     strcpy(dest, argv[2]);
+    from_l = strlen(from);
+    dest_l = strlen(dest);
+    if(dest_l != 0 && dest[dest_l - 1] == '/')
+    {
+        int i = from_l;
+        while(i >= 0 && from[i] != '/')
+            --i;
+        ++i;
+        strcpy(dest + dest_l, from + i);
+    }
     copy(from, dest);
+    destroy_tree(tree_root);
     return 0;
 }
