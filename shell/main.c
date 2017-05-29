@@ -18,6 +18,8 @@
 int _argc;
 char** _argv;
 pid_t current_foreground = -1;
+pid_t* pids;
+int g_cnt;
 
 int handle_program(program* p)
 {
@@ -28,100 +30,42 @@ int handle_program(program* p)
     return E_EXEC;
 }
 
-void handle_job(job* j)
+void ctrl_c_job(int signum)
 {
     int i;
-    int pipefd[2][2];
-    signal(SIGCHLD, SIG_IGN);
-    for(i = 0; i < j->number_of_programs; ++i)
+    int status;
+    for(i = 0; i < g_cnt; ++i)
     {
-        pid_t pid;
-        int fd_in = 0, fd_out = 1;
-        if(strcmp(j->programs[i]->name, "exit") == 0)
+        if(pids[i] != 0)
         {
-            job_destroy(j);
-            destroy();
-            exit(0);
-        }
-        if(i + 1 < j->number_of_programs)
-        {
-            pipe(pipefd[i & 1]);
-        }
-        if(i > 0)
-        {
-            fd_in = pipefd[(i & 1) ^ 1][0];
-        }
-        if(i + 1 < j->number_of_programs)
-        {
-            fd_out = pipefd[i & 1][1];
-        }
-        if(j->programs[i]->input_file != NULL)
-        {
-            int fd = open(j->programs[i]->input_file, O_RDONLY);
-            if(fd == -1)
-            {
-                perror("Can't open file to read");
-            }
-            else
-            {
-                if(fd_in != 0)
-                    close(fd_in);
-                fd_in = fd;
-            }
-        }
-        if(j->programs[i]->output_file != NULL)
-        {
-            int append = j->programs[i]->output_type == M_APPEND ? O_APPEND : O_TRUNC;
-            int fd = open(j->programs[i]->output_file, O_WRONLY | O_CREAT | append, 0644);
-            if(fd == -1)
-            {
-                perror("Can't open file to read");
-            }
-            else
-            {
-                if(fd_out != 1)
-                    close(fd_out);
-                fd_out = fd;
-            }
-        }
-        pid = fork();
-        if(pid == 0)
-        {
-            dup2(fd_in, 0);
-            dup2(fd_out, 1);
-            if(handle_program(j->programs[i]))
-            {
-                exit(E_EXEC);
-            }
-        }
-        else
-        {
-            int status;
-            current_foreground = pid;
-            waitpid(pid, &status, 0);
-            current_foreground = -1;
-            if(i > 0 || j->programs[i]->input_file != NULL)
-                close(fd_in);
-            if(i + 1 < j->number_of_programs || j->programs[i]->output_file != NULL)
-                close(fd_out);
-            if(WIFEXITED(status))
-            {
-                if(!j->background)
-                {
-                    last_foreground_result = WEXITSTATUS(status);
-                }
-                if(WEXITSTATUS(status) != 0)
-                {
-                    fprintf(stderr, "Process %d exited with non-zero code %d\n", pid, WEXITSTATUS(status));
-                }
-            }
-            else if(WIFSIGNALED(status))
-            {
-                fprintf(stderr, "Process %d was terminated by a signal %d\n", pid, WTERMSIG(status));
-            }
+            kill(pids[i], signum);
+            waitpid(pids[i], &status, 0);
+            fprintf(stderr, "Killed %d, pid: %d\n", i, pids[i]);
         }
     }
-    job_destroy(j);
+    exit(0);
+}
+
+int handle_job(job* j)
+{
+    int i;
+    int** fd;
+    if(strcmp(j->programs[0]->name, "exit") == 0)
+    {
+        job_destroy(j);
+        destroy();
+        exit(0);
+    }
+    fd = calloc(j->number_of_programs, sizeof(int*));
+    for(i = 0; i j->number_of_programs; ++i)
+    {
+        fd[i] = calloc(2, sizeof(int));
+    }
+    pids = calloc(j->number_of_programs, sizeof(pid_t));
+    for(i = 0; i < j->number_of_programs; ++i)
+    {
+        
+    }
 }
 
 void ctrl_c_handler(int signum)
