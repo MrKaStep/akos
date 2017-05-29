@@ -34,6 +34,9 @@ void print_err(int err, char* message)
     case E_DREDIR:
         fprintf(stderr, "%s: double input/output redirection", message);
         break;
+    case E_EXEC:
+        fprintf(stderr, "%s: execution failed", message);
+        break;
     }
     fputs("\n", stderr);
 }

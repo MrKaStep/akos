@@ -27,6 +27,10 @@ int cnt;
 int handle_program(program* p)
 {
     int err;
+    if(strcmp(p->name, "cd") == 0)
+    {
+        return cd(p->number_of_arguments > 0 ? p->arguments[0] : home_dir);
+    }
     err = execvp(p->name, p->arguments);
     fputs(p->name, stderr);
     perror("Can't execute program");

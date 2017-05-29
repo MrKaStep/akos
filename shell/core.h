@@ -29,6 +29,8 @@ pid_t shell_pid;
 extern char* buf;
 extern int need_invite;
 
+void init_env();
+
 int init();
 
 void destroy();
