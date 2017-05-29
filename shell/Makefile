@@ -3,11 +3,11 @@ OBJS = $(patsubst %.c, %.o, $(wildcard *.c))
 FORMS = $(patsubst %.c, %.form, $(wildcard *.c))
 
 my_shell: $(OBJS)
-	gcc -o my_shell $^
+	gcc -g -o my_shell $^
 
 %.o: %.c
-	gcc -std=c89 -Wall -Wextra -ansi -pedantic -c $<
-	astyle --style=stroustrup $(CUR_DIR)/$<
+	gcc -g -std=c89 -Wall -Wextra -ansi -pedantic -c $<
+	astyle --style=ansi $(CUR_DIR)/$<
 
 
 %.form: %.c

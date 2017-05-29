@@ -263,7 +263,7 @@ int copy_dir(char* from, char* dest)
 
 int copy_fifo(char* from, char* dest)
 {
-    if(mkfifo(dest, 0777) == -1)
+    if(mkfifo(dest, 0600) == -1)
     {
         perror("Create FIFO failed");
         return E_WRITE;

@@ -21,8 +21,16 @@ char* username;
 char* hostname;
 char* home_dir;
 char cur_path[PATH_MAX];
+extern int _argc;
+extern char** _argv;
+int last_foreground_result;
+pid_t shell_pid;
+
+extern char* buf;
+extern int need_invite;
 
 int init();
 
+void destroy();
 
 #endif
