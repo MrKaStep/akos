@@ -67,8 +67,4 @@ Swap --- это некоторый диапазон на внешнем запо
 \item 1 --- Ядро выпадает в Kernel Panic
 
 \item 2 --- Считается величина $swap + mem \cdot \frac{ratio}{100}$, которая является допустимым объёмом используемой памяти. Если мы \textit{случайно} выставим \verb!vm.overcommit_ratio! хотя бы 100, то при переполнении реальной памяти... будет вызван OOM killer.
-\end{itemize} 
-
-\begin{center}
-slab-алгоритм, baddy-алгоритм.
-\end{center}
+\end{itemize}
