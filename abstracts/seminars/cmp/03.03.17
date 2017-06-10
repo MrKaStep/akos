@@ -1,0 +1,108 @@
+\subsection{Ввод-вывод в C}
+
+Низкоуровневый:
+
+\begin{itemize}
+\item open
+\item read
+\item write
+\item ioctl
+\item ...
+\end{itemize}
+
+Высокоуровневый ввод-вывод реализован через \verb!FILE! (stdio.h).
+
+Используют \verb!FILE*!. С каждой программой ассоциированы \verb!stdin!, \verb!stdout!, \verb!stderr!.
+
+Например: \verb!fopen(<filename>, <format_string>)!, который возвращает \verb!FILE*!, если всё плохо, то NULL.
+
+Строка формата может быть одной из:
+\begin{itemize}
+\item \verb!r! --- чтение
+\item \verb!w! --- запись
+\item \verb!a! --- добавление
+\item \verb!r+! --- чтение с возможностью записи
+\item \verb!w+! --- запись с возможностью чтения
+\item \verb!w+! --- добавление с возможностью чтения
+\end{itemize}
+
+Перемещение курсора делается при помощи \verb!fseek!.
+
+Для работы с \verb!FILE*! используют \verb!fread!, \verb!fwrite!.
+
+\begin{verbatim}
+ssize_t fread(void*, size_t num_itmes, size_t item_size, FILE*)
+\end{verbatim}
+Первый аргумент --- то, куда мы хотим считать. \verb!fwrite! аналогичен.
+
+\verb!int fgetc(FILE* f)! --- читает символ из файла, возвращает как \verb!int!, если что-то пошло не так или файл закончился: \verb!EOF!.
+
+\verb!int ungetc(FILE*, char)! --- вернуть символ наверх.
+
+\verb!int putc(int, FILE*)! --- положить символ в файл.
+
+\verb!getchar()!, \verb!putchar! --- аналоги со стандартными файлами.
+
+Для чтения используются \verb!scanf, gets!. Но это опасно. Есть
+\begin{verbatim}
+void* fgets(char*, size_t buf_size, FILE*)
+\end{verbatim}
+
+\subsection{Домашка 3}
+
+Реализовать
+\begin{verbatim}
+int read_string(char **str, FILE*f)
+\end{verbatim}
+
+или
+
+\begin{verbatim}
+char* read_string(FILE*, int* err_code)
+\end{verbatim}
+
+Реализация должна быть безопасной.
+
+Работа с динамической памятью:
+\begin{verbatim}
+void* malloc(size_t size) //NULL, если всё плохо
+void free(void* pointer)
+void* calloc(size_t num, size_t size) //num - размер массива, size - размер 
+									   //элемента, инициализация
+void* realloc(void* pointer, size_t new_size) //пытается увеличить объем 
+											   //памяти до new_size
+\end{verbatim}
+
+\subsection{Make-файлы}
+
+Пусть мы хотим большой программный проект из пачки файлов. Цепочка include'ов --- плохой тон, не надо так.
+
+Для этого созданы Make-файлы. На Linux используют maven.
+
+Есть понятия \textbf{цель} и \textbf{подцели}. Создан некоторый декларативный язык.
+
+Пусть программа состоит из a.c и b.c.
+
+\begin{verbatim}
+all : prog
+a.o : a.c
+    gcc -c a.c
+b.o : b.c
+    gcc -c b.c
+prog : a.o b.o
+    gcc -o prog a.o b.o
+clean :
+    rm -f prog a.o b.o
+\end{verbatim}
+
+Есть шаблоны правил, например:
+\begin{verbatim}
+%.o : %.c %.h
+    gcc -c -o $@ $<
+\end{verbatim}
+
+\verb!$@! --- левая часть правила, \verb!$<! --- первая часть правой часть, \verb!$^! --- вся правая часть.
+
+А ещё есть переменные. Например, каноническая переменная \verb!CC = gcc! --- компилятор C. Ещё канон --- \verb!CFLAGS!, там обычно указывают параметры компилятора. Использование через \verb!$(CC)!. В круглых скобках указываются переменные Make-файла, в фигурных --- shell'а.
+
+Можно определить переменную \verb!OBJS = $(patsubst %.c, %.0, $(wildcard *.c))!. \verb!wildcard! пробежится по каталогу, собрав все .c файлы в список через пробел. \verb!patsubst! все штуки вида \verb!%.c! на \verb!%.o!. И теперь, можно сделать \verb!prog : $(OBJS)!

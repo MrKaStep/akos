@@ -1,0 +1,247 @@
+\pagestyle{headings}
+
+%отступ слева; по умолчанию один дюйм
+\oddsidemargin=-1.54cm
+%ширина текста
+\textwidth=19cm
+
+%отступ сверху; по умолчанию один дюйм
+\topmargin=-1.54cm
+%высота текста, плюс всякие колонтитулы и отступы
+\textheight=267mm
+
+%для псевдорисунков
+%\RequirePackage{wrapfig}
+%размеры псевдорисунков в миллиметрах
+%\unitlength=1mm
+%увеличить количество точек в линиях (по умолчанию 500)
+%\renewcommand{\qbeziermax}{1000}
+
+%сдвиг всей страницы целиком, если принтер кривоват
+%\hoffset=-5mm
+%\voffset=4.2mm
+
+\frenchspacing
+%подключаем доп. мат. символы и шрифты
+\RequirePackage{amssymb, amsmath, amscd, euscript}
+%чтобы дословно цитировать документы
+\RequirePackage{verbatim}
+%типографические символы + улучшенное тире
+\RequirePackage{textcomp}
+%задаем кодировку иностранных символов
+\RequirePackage[utf8]{inputenc}
+%зачем?
+\RequirePackage[T1, T2A]{fontenc}
+%добавляем русский язык
+\RequirePackage[english, russian]{babel}
+%дополнительные пробелы к формулам
+%актуально с текстом на латинице
+%\mathsurround=2pt
+\RequirePackage{stmaryrd}
+\RequirePackage{upgreek}
+\RequirePackage{marvosym}
+\RequirePackage[usenames]{color}
+\RequirePackage{colortbl}
+\RequirePackage{indentfirst}
+
+
+%разрешить страницам иметь разную высоту
+\raggedbottom
+
+%увеличить интервалы между строками
+%\renewcommand{\baselinestretch}{1.01}
+
+%доп. отступ между абзацами
+%\parskip=3mm
+
+%----------
+
+%выключить переносы совсем
+%\binoppenalty=10000
+%\relpenalty=10000
+
+%нежелательность разрыва после первой строки абзаца
+\clubpenalty=500
+%нежелательность разрыва перед последней строкой абзаца
+\widowpenalty=500
+
+%перенос с дублированием знаков, вставить \hm перед оным
+%\newcommand*{\hm}[1]{#1\nobreak\discretionary{}%
+%            {\hbox{$\mathsurround=0pt #1$}}{}}
+
+%----------
+%\DeclareMathOperator{\tg}{tg}
+\DeclareMathOperator{\Nod}{\text{НОД}}
+\DeclareMathOperator{\Nok}{\text{НОК}}
+\DeclareMathOperator{\ind}{\mathrm{ind}}
+
+\def\dev{\smash{\lower.3ex\hbox{$\:\vdots\;$}}}
+\newcommand{\ra}{\rightarrow}
+%----------
+
+\renewcommand{\Im}{\mathop{\mathrm{Im}}\nolimits}
+\renewcommand{\Re}{\mathop{\mathrm{Re}}\nolimits}
+%обратить внимание на \pmod
+%\empth вместо \textit
+%обратить внимание на переключение шрифта после завершения абзаца
+
+%----------
+%борьба со шрифтами
+
+%более русское тире
+\def\d{\textthreequartersemdash { }}
+%жирный шрифт поадекватнее
+\renewcommand{\bfdefault}{b}
+%разрешаем переносить две буквы (выключить перед english)
+%\righthyphenmin=3
+
+%чтобы научить тех переносить раз и навсегда
+%\hyphenation{об-ласть}
+
+%не считать overfull'ом вылез на
+\hfuzz=0.5pt
+%разрешить разреженные строки до
+\tolerance=300
+
+%для уменьшения количества строчек, занимаемых абзацем,
+%\looseness=-1
+%устанавливается отдельно для каждого абзаца
+
+%для уменьшения количества переносов подряд (по умолчанию 10^4)
+\doublehyphendemerits=1000000
+
+\renewcommand{\@oddhead}{\raisebox{0pt}[\headheight][0pt]{\vbox{\hbox to\textwidth{ \strut \slshape \hfil Степан Калинин $\bullet$ группа 694}\hrule}}% конец блока
+}
+
+%\newcounter{punk}
+%\newcommand{\pun}{\setcounter{punk}{0}}
+%\newcommand(\pu}{\refstepcounter{punk}\newline\text{\arabic{zadacha})}}
+
+\newcommand{\head}[1]{\setcounter{pun}{0}\newpage \vspace{-11mm}\centerline{\textbf{\huge #1}}}
+
+\newcommand{\headd}[2]{\large\setcounter{pun}{0}\newpage \vspace{-11mm} \centerline{\textbf{\huge #1}} {\large} \centerline{\textsl{\small #2}} \smallskip}
+
+\newcommand{\Head}[1]{\setcounter{pun}{0}\vspace{-11mm}\centerline{\textbf{\huge #1}}}
+
+\newcommand{\Headd}[2]{\large\setcounter{pun}{0}\vspace{-11mm} \centerline{\textbf{\huge #1}} {\large} \centerline{\textsl{\small #2}} \smallskip}
+
+\newcommand{\sub}[1]{\setcounter{pun}{0}\vspace{5mm}\textsl{\LARGE #1}\newline}
+
+\newcommand{\al}{\forall}
+\newcommand{\ex}{\exists}
+\newcommand{\st}{\par\Bat~}
+
+\def\De{\setcounter{pun}{0} \textbf{Опр. }}
+
+\newcounter{def}
+\setcounter{def}{0}
+\newcommand{\DE}{\refstepcounter{def}\textbf{Опр \arabic{def}. }}
+
+
+\def\exam{\setcounter{pun}{0} \textbf{Пример. }}
+\def\rem{\setcounter{pun}{0} \textbf{Замечание. }}
+\def\exer{\setcounter{pun}{0} \textbf{Упражнение. }}
+\def\thm{\setcounter{pun}{0} \textbf{Теорема. }}
+\def\pr{\setcounter{pun}{0} \textbf{Утверждение. }}
+\def\pro{\setcounter{pun}{0} \textbf{Предложение. }}
+%\def\proof{\setcounter{pun}{0} \textbf{Доказательство. }}
+\def\con{\setcounter{pun}{0} \textbf{Следствие. }}
+\def\des{\setcounter{pun}{0} \textbf{Обозначение. }}
+\def\lem{\setcounter{pun}{0}\textbf{Лемма. }}
+\def\prob{\textbf{Задача. }}
+\def\bs{\backslash}
+
+\def\sm{\setminus}
+
+\def\divs{\,\vdots\,}
+
+\newcommand{\legendre}[2]{\left(\displaystyle\frac{#1}{#2}\right)}
+
+\def\R{{\mathbb R}}
+\def\Q{{\mathbb Q}}
+\def\Z{{\mathbb Z}}
+\def\C{{\mathbb C}}
+\def\N{{\mathbb N}}
+\def\F{{\mathbb F}}
+
+\def\leq{\leqslant}
+\def\geq{\geqslant}
+\def\preceq{\preccurlyeq}
+
+\def\emps{\varnothing}
+
+\def\and{\wedge}
+%\def\or{\vee}
+\def\And{\bigwedge\limits}
+\def\Or{\bigvee\limits}
+\def\un{\cup}
+\def\Un{\bigcup\limits}
+\def\inter{\cap}
+\def\Inter{\bigcap\limits}
+\def\imp{\to}
+\def\xor{\oplus}
+
+\def\ra{~\rightarrow~}
+\def\la{~\leftarrow~}
+\def\Ra{~\Rightarrow~}
+\def\La{~\Leftarrow~}
+\def\lra{\leftrightarrow}
+\def\Lra{~\Leftrightarrow~}
+
+\renewcommand{\vec}{\overline}
+
+\DeclareMathOperator{\I}{\mathbf{\refstepcounter{pun}\smallskip \textbf{\arabic{pun})}} }
+
+
+\renewcommand{\phi}{\varphi}
+\newcommand{\Sum}{\sum\limits}
+\newcommand{\Prod}{\prod\limits}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\rng}[2]{#1,\ldots ,#2}
+\newcommand{\rngs}[2]{#1+\ldots +#2}
+\newcommand{\calP}{\mathcal{P}}
+\newcommand{\calI}{\mathcal{I}}
+
+\newcommand{\RN}[1]{%
+  \textup{\uppercase\expandafter{\romannumeral#1}}%
+}
+
+\newcommand{\hr}{\hrulefill}
+
+\newcounter{pun}
+\setcounter{pun}{0}
+\renewcommand{\i}{\par\setcounter{spun}{0}\refstepcounter{pun}\smallskip \arabic{pun}) }
+
+\newcounter{spun}
+\setcounter{spun}{0}
+\newcommand{\si}{\par\refstepcounter{spun}\quad\textbf{\arabic{spun}.} }
+
+\newcounter{thm}[section]
+\setcounter{thm}{0}
+\newcommand{\Thm}{\setcounter{pun}{0} \refstepcounter{thm} \textbf{Теорема \arabic{thm}. }}
+\newcommand{\THM}[1]{\setcounter{pun}{0} \refstepcounter{thm} \textbf{Теорема \arabic{thm} (#1). }}
+
+
+\newcommand{\THm}[1]{\setcounter{pun}{0} \textbf{Теорема (#1). }}
+
+\newcounter{lemm}[section]
+\setcounter{lemm}{0}
+\newcommand{\Lemma}{\setcounter{pun}{0} \refstepcounter{lemm} \textbf{Лемма \arabic{lemm}. }}
+
+
+\newcommand{\T}[1]{\textbf{T.#1}}
+
+\newcommand{\clr}{\setcounter{pun}{0}}
+\newcommand{\textred}[1]{\textcolor{red}{#1}}
+\newcommand{\textgre}[1]{\textcolor{green}{#1}}
+\newcommand{\textblu}[1]{\textcolor{blue}{#1}}
+\newcommand{\textyel}[1]{\textcolor{yellow}{#1}}
+
+\newenvironment{proof}{$\blacktriangle$ }{ $\blacksquare$}
+
+\def\d{\mathrm{d}}
+\def\tr{\mathrm{tr}}
+
+\def\suminf{\Sum_{n=1}^\infty}
+
+\def\dra{\rightrightarrows}

@@ -1,0 +1,162 @@
+\section{Работа с файловой системой}
+
+Рассмотрим стандартные утилиты. В целом, содержание пакета \verb!linux-utils!.
+
+\begin{itemize}
+\item \verb!ls, dir!
+\item \verb!touch!
+\item \verb!find, locate!
+\item \verb!mkdir, mv, cd, rm, rmdir, install!
+\item \verb!chmodб chown! --- смена прав и владельца
+\item \verb!stat!
+\begin{verbatim}
+chmod -R g-rwX, o-rwx
+\end{verbatim}
+Здесь у группы отбираются права на чтение, запись и исполнение каталогов (нельзя в них сделать \verb!cd!), а у остальных отбираются все права.
+
+Также на каталоге можно выставить бит \verb!t! --- travercy bit, и два бита \verb!s! --- то, от чьего имени запускать приложение
+\end{itemize}
+
+\subsection{Работа с метаинформацией}
+
+Сюда входят утилиты п
+
+В UNIX принятно, что файловая система создаётся при помощи \newline\verb!mkfs.<system_name> <dev_name>!
+
+Изменять параметры файловой системы можно, например, при помощи \verb!tune2fs! --- меняет метку (используется с файловыми системами \verb!ext!)
+
+\verb!fsck! используется для проверки целостности файловой системы. \verb!mount, umount! для монтирования и размонтирования системы соответственное.
+
+\subsection{Работа с файлами устройств для внешнего хранения}
+
+\begin{verbatim}
+dd if=/devcdrom of=/archive/cd/music.iso
+\end{verbatim}
+
+Эта команда просто, тупо, копирует побайтово копирует из \verb!if! в \verb!of!. Но надо быть осторожным. Даже осторожнее, чем с \verb!reinterpret_cast! в плюсах.
+
+\subsubsection*{Таблицы разделов}
+
+Есть два типа таблиц разделов --- GPT и MBR. На самом деле, есть ещё Sun, SGI, BSD...
+
+А ещё есть два семейства программ:
+
+\begin{itemize}
+\item \verb!sfdisk, fdisk, cfdisk! --- манипуляция с таблицами разделов MBR. \verb!sfdisk! --- абсолютно неинтерактивная манипуляция для использования в скриптах и простого переноса таблицы разделов с одного диска на другой. \verb!fdisk! --- обычная диалоговая система. \verb!cfdisk! --- более-менее приятный интерфейс.
+
+\item \verb!sgdisk, gdisk, cgdisk! --- то же самое, но для GPT.
+\end{itemize}
+
+\subsection{Остальное}
+
+Есть \verb!du! --- disk-usage, \verb!df! --- disk-free.
+
+\section{Работа с потоком в терминале}
+
+\begin{itemize}
+\item \verb!more! --- просмотр файлов. 
+\item \verb!less! --- более умный просмотр файлов с построковой прокруткой, прокруткой влево-вправо и поиском при помощи \verb!/!
+\item \verb!head! --- вывод начала файла
+\item \verb!tail! --- вывод конца файла.
+\item \verb!cat! --- КРАЙНЕ минималистичный редактор))
+\item \verb!yes!
+\item \verb!tee! --- читать из стандартного ввода и выводить в стандартный вывод и в указанные файлы.
+\item \verb!xargs! --- может многое. Формирует из строки команду, запуская её.
+\item \verb!cut! --- вырезать из файла. Изменённый файл выплёвывается в стандартный поток вывода.
+\end{itemize}
+
+Базовые утилиты на этом заканчиваются.
+
+\begin{itemize}
+\item \verb!sed! --- строковый редактор, оперирующий строками и регулярками.
+\item \verb!grep! --- фильтр. Выводит все строки, в которых встречается данная строка
+\item \verb!awk! --- текстовый процессор. Наиболее используемая фишка --- напечатать нужный столбец.
+\end{itemize}
+
+\section{Манипуляция с процессами}
+
+\begin{itemize}
+\item \verb!ps! --- список процессов (по умолчанию запущенных из данного шелла). Если нужно список всех процессов, \verb!ps aux!.
+\item \verb!top! --- список процессов, отсортированных по использованию ресурсов
+\item \verb!htop! --- ещё круче, но нужно скачивать
+\item \verb!kill! --- убить (послать сигнал SIGTERM)
+\item \verb!killall! --- убить ВСЕХ (с данным префиксом)
+\item \verb!renice! --- смена приоритета процесса.
+\item \verb!chroot! --- смена корня для процесса и всех его потомков.
+\item \verb!exec! --- выполнить
+\end{itemize} 
+
+\section{Вернёмся к нашим бара... C}
+\subsection{Как поговорить через сеть?}
+
+\begin{verbatim}
+#include <sys/sockcet.h>
+\end{verbatim}
+
+Для общения по сети есть целая одна функция
+\begin{verbatim}
+int socket(int domain, int discipline, int protocol)
+\end{verbatim}
+\begin{itemize}
+\item \verb!domain! --- семейство протоколов
+\item \verb!discipline!
+\begin{itemize}
+\item \verb!SOCK_STREAM! --- передача потока байт
+\item \verb!SOCK_DGRAM! --- обмен сообщениями конкретного размера.
+\end{itemize}
+\item \verb!protocol! --- протокол
+\begin{itemize}
+\item \verb!PF_INET!, \verb!PF_INET6! --- IPv4 И IPv6
+\item \verb!PF_DTM!
+\item \verb!PF_APPLETALK!
+\item \verb!PF_IPX!
+\item \verb!PF_UNIX! --- универсальная заглушка. Можно использовать функции любого протокола, но взаимодействие возможно только в локальной системе и адресация происходит через файл в файловой системе.
+\item \verb!PF_RAW! --- передача байт как есть
+\item ...
+\end{itemize}
+\end{itemize}
+
+Теперь будем разбирать механизмы \verb!PF_INET!. Стоит почитать \verb!man 7 ip!.
+
+Протокол TCP --- протокол с установлением соединения. Предполагается, что есть клиент и сервер.
+
+Со стороны сервера происходит следующее:
+
+\begin{itemize}
+\item \verb!id = socket!\hfil
+\item \verb!bind(id)! --- привязка к IP-адресу и порту\hfill
+
+порт --- число типа \verb!unsigned short!, причем 1-1024 зарезервированы ядром.
+\item \verb!listen(id, 5)! --- перевод сокета в слушающий режим, число --- количество клиентов, которые могут одновременно находиться в режиме установления соединения
+\item
+\begin{verbatim}
+while(1)
+{
+    int client_fd;
+    client_fd = accept(id, &address);
+    if(fork() == 0)
+    {
+        работа с клиентом
+    }
+    close(client_fd);
+}
+\end{verbatim}
+\item При завершении работы сервера нужно закрыть socket. 
+\end{itemize}
+
+Со стороны клиента:
+\begin{itemize}
+\item \verb!id = socket!
+\item \verb!connect(id, &address)!
+\item Взаимодействие....
+\item \verb!close(id)!
+\end{itemize}
+
+\subsection{Засада с адресами}
+
+\begin{enumerate}
+\item Сетевой порядок байт. Для работы с этим используется набор функция \verb!htons!, \verb!ntohs!, \verb!htonl!, \verb!ntohl!.
+\item DNS --- Domain Name Services. Смысл этой штуки в том, чтобы адресу сопоставить некоторую строку. С его помощью можно по строке узнать IP адрес и наоборот. Для работы с ним есть две функции: \verb!getaddrinfo! и \verb!gethostbyname!, \verb!gethostbyaddr!
+\end{enumerate}
+
+
