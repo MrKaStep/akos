@@ -35,14 +35,16 @@ void program_destroy(program* p)
 void print_program(program* p)
 {
     int i;
-    printf("Program name: %s\nNumber of argumets: %d\nInput file: %s\nOutput file: %s\nOutput type: %s\nArguments:\n",
-           p->name,
-           p->number_of_arguments,
-           p->input_file == NULL ? "NULL" : p->input_file,
-           p->output_file == NULL ? "NULL" : p->output_file,
-           p->output_type == M_REWRITE ? "rewrite" : "append");
     for(i = 0; i < p->number_of_arguments; ++i)
     {
-        puts(p->arguments[i]);
+        printf("%s ", p->arguments[i]);
+    }
+    if(p->input_file != NULL)
+    {
+        printf("< %s ", p->input_file);
+    }
+    if(p->output_file != NULL)
+    {
+        printf("%s %s", p->output_type == M_APPEND ? ">>" : ">", p->output_file);
     }
 }

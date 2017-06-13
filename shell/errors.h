@@ -23,6 +23,10 @@
 #define E_PIPERR -10
 #define E_DREDIR -11
 #define E_EXEC   -12
+#define E_WRITE  -13
+#define E_READ   -14
+#define E_FORK   -15
+#define E_BGJOB  -16
 
 void print_err(int err, char* message);
 

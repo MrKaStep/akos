@@ -10,29 +10,42 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pwd.h>
+#include <termios.h>
+#include <signal.h>
 
 #include "errors.h"
 #include "utils.h"
+#include "job.h"
 
 #define PATH_MAX 4096 /*Временный костыль для непонятной ошибки*/
 
-struct passwd* user;
-char* username;
-char* hostname;
-char* home_dir;
-char cur_path[PATH_MAX];
-extern int _argc;
-extern char** _argv;
-int last_foreground_result;
+int _argc;
+char** _argv;
+
 pid_t shell_pid;
+struct termios shell_termios;
+int shell_terminal;
+
+char hostname[4096];
 
 extern char* buf;
+
+int last_foreground_result;
+
+job** jobs;
+
+size_t jobs_capacity, jobs_count, jobs_alive;
+
 extern int need_invite;
+
 
 void init_env();
 
 int init();
 
-void destroy();
+int inv_exit(char force);
+
+
+
 
 #endif

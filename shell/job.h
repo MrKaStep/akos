@@ -15,6 +15,12 @@ struct job_s
     int background;
     program** programs;
     int number_of_programs;
+
+    pid_t pid;
+
+    int stopped;
+    int complete;
+    int printed;
 };
 
 typedef struct job_s job;

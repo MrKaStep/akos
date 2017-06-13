@@ -10,214 +10,285 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <errno.h>
 
 #include "core.h"
 #include "program.h"
 #include "getters.h"
+#include "built_in.h"
 
-int _argc;
-char** _argv;
-pid_t current_foreground = -1;
-pid_t* volatile pids;
-int** volatile pipefd;
-int **fd;
-volatile int rem;
-int cnt;
 
-int handle_program(program* p)
+
+
+
+
+void wait_job(job* j)
 {
-    int err;
-    if(strcmp(p->name, "cd") == 0)
+    int status;
+    waitpid(j->pid, &status, WUNTRACED);
+    if(WIFSTOPPED(status))
     {
-        return cd(p->number_of_arguments > 0 ? p->arguments[0] : home_dir);
+        j->stopped = 1;
+        print_job(j);
     }
-    err = execvp(p->name, p->arguments);
-    fputs(p->name, stderr);
-    perror("Can't execute program");
-    return E_EXEC;
+    else
+    {
+        j->stopped = 0;
+        j->complete = 1;
+        jobs_alive -= 1;
+        last_foreground_result = WEXITSTATUS(status);
+    }
 }
 
-void chld_handler(int signum)
+void make_fg(job* j, int to_continue)
 {
-    pid_t pid;
+    struct termios old_termios;
     int status;
-    int i;
-    while((pid = waitpid(-1, &status, WNOHANG)) > 0)
+    j->stopped = 0;
+    j->complete = 0;
+    tcgetattr(shell_terminal, &old_termios);
+    tcsetpgrp(shell_terminal, j->pid);
+    if(to_continue)
     {
-        for(i = 0; i < cnt; ++i)
+        kill(-j->pid, SIGCONT);
+    }
+    wait_job(j);
+    tcsetpgrp(shell_terminal, shell_pid);
+}
+
+void make_bg(job* j, int to_continue)
+{
+    j->stopped = j->complete = 0;
+    if(to_continue)
+    {
+        kill(-j->pid, SIGCONT);
+    }
+}
+
+void handle_internal(program* p, char piped)
+{
+    int c = is_internal(p->name);
+    switch(c)
+    {
+    case INT_CD:
+        cd(p);
+        break;
+    case INT_PWD:
+        pwd();
+        break;
+    case INT_EXIT:
+        inv_exit(0);
+        break;
+    case INT_JOBS:
+        print_jobs();
+        break;
+    case INT_BG:
+        if(piped)
         {
-            if(pid == pids[i])
+            printf("bg: no effect when piped\n");
+        }
+        else
+        {
+            int i;
+            pid_t pid;
+            pid = (pid_t)strtol(
+                      p->arguments[1],
+                      p->arguments[1] + strlen(p->arguments[1]),
+                      10
+                  );
+            for(i = 0; i < jobs_count; ++i)
             {
-                --rem;
-                pids[i] = 0;
-                break;
+                if(jobs[i]->stopped && jobs[i]->pid == pid)
+                {
+                    make_bg(jobs[i], 1);
+                    return;
+                }
             }
         }
+        break;
+    case INT_FG:
+        if(piped)
+        {
+            int i;
+            printf("fg: no effect when piped\n");
+        }
+        else
+        {
+            int i;
+            pid_t pid;
+            pid = (pid_t)strtol(
+                      p->arguments[1],
+                      p->arguments[1] + strlen(p->arguments[1]),
+                      10
+                  );
+            for(i = 0; i < jobs_count; ++i)
+            {
+                if(jobs[i]->stopped && jobs[i]->pid == pid)
+                {
+                    make_fg(jobs[i], 1);
+                    return;
+                }
+            }
+        }
+        break;
     }
-    signal(signum, chld_handler);
+    if(piped)
+    {
+        inv_exit(1);
+    }
 }
 
-void ctrl_c_job(int signum)
+int handle_program(program* p, int inp, int out)
 {
-    int i;
-    for(i = 0; i < cnt; ++i)
+    int fd_in, fd_out;
+    if(p->input_file != NULL)
     {
-        if(pids[i] != 0)
+        fd_in = open(p->input_file, O_RDONLY);
+        if(fd_in == -1)
         {
-            kill(pids[i], signum);
-            waitpid(pids[i], NULL, 0);
+            perror("Can't read file");
+            inv_exit(1);
         }
+        if(inp != STDIN_FILENO)
+            close(inp);
+        inp = fd_in;
     }
-    rem = 0;
-    signal(signum, ctrl_c_job);
+    if(p->output_file != NULL)
+    {
+        fd_out = open(p->output_file, O_WRONLY | O_CREAT | (p->output_type == M_APPEND ? O_APPEND : 0));
+        if(fd_out == -1)
+        {
+            perror("Can't write to file");
+            inv_exit(1);
+        }
+        if(out != STDOUT_FILENO)
+            close(out);
+        out = fd_out;
+    }
+    if(inp != STDIN_FILENO)
+    {
+        dup2(inp, STDIN_FILENO);
+        close(inp);
+    }
+    if(out != STDOUT_FILENO)
+    {
+        dup2(out, STDOUT_FILENO);
+        close(out);
+    }
+    if(is_internal(p->name))
+    {
+        handle_internal(p, 1);
+    }
+    execvp(p->name, p->arguments);
+    perror("exec");
+    exit(1);
 }
 
 int handle_job(job* j)
 {
     int i;
-    pid_t pid_job = fork();
-    if(strcmp(j->programs[0]->name, "exit") == 0)
+    pid_t pid;
+    int inp = STDIN_FILENO, out = STDOUT_FILENO;
+
+    j->complete = 0;
+    j->stopped = 0;
+
+    pid = fork();
+
+    if(pid == 0)
     {
-        job_destroy(j);
-        destroy();
-        exit(0);
-    }
-    if(pid_job == 0)
-    {
-        pids = calloc(j->number_of_programs, sizeof(pid_t));
-        pipefd = calloc(j->number_of_programs - 1, sizeof(int*));
-        fd = calloc(j->number_of_programs, sizeof(int*));
-        signal(SIGINT, ctrl_c_job);
-        signal(SIGCHLD, chld_handler);
-        cnt = j->number_of_programs;
-        rem = cnt;
-        for(i = 0; i < j->number_of_programs - 1; ++i)
-        {
-            pipefd[i] = calloc(2, sizeof(int));
-            pipe(pipefd[i]);
-        }
+        int pipefd[2];
+        int i;
+        int status;
+
+        signal(SIGINT, SIG_DFL);
+        signal(SIGTSTP, SIG_DFL);
+        signal(SIGTTIN, SIG_DFL);
+        signal(SIGTTOU, SIG_DFL);
+
+        setpgid(getpid(), getpid());
         for(i = 0; i < j->number_of_programs; ++i)
         {
-            int fd_in, fd_out, append;
-            fd[i] = calloc(2, sizeof(int));
-            fd[i][0] = (i == 0 ? 0 : pipefd[i - 1][0]);
-            fd[i][1] = (i == j->number_of_programs - 1 ? 1 : pipefd[i][1]);
-            if(j->programs[i]->input_file != NULL)
+            if(i != j->number_of_programs - 1)
             {
-                fd_in = open(j->programs[i]->input_file, O_RDONLY);
-                if(fd_in == -1)
-                {
-                    perror("Can't read file");
-                }
-                else
-                {
-                    close(fd[i][0]);
-                    fd[i][0] = fd_in;
-                }
-            }
-            if(j->programs[i]->output_file != NULL)
-            {
-                append = (j->programs[i]->output_type == M_APPEND ? O_APPEND : O_TRUNC);
-                fd_out = open(j->programs[i]->output_file, O_WRONLY | O_CREAT | append, 0644);
-                if(fd_out == -1)
-                {
-                    perror("Can't write file");
-                }
-                else
-                {
-                    close(fd[i][1]);
-                    fd[i][1] = fd_out;
-                }
-            }
-        }
-        for(i = 0; i < j->number_of_programs; ++i)
-        {
-            pids[i] = fork();
-            if(pids[i] == 0)
-            {
-                fprintf(stderr, "Program %d, input = %d, output = %d\n", i, fd[i][0], fd[i][1]);
-                dup2(fd[i][0], 0);
-                dup2(fd[i][1], 1);
-                handle_program(j->programs[i]);
+                pipe(pipefd);
+                out = pipefd[1];
             }
             else
             {
-                fprintf(stderr, "Closing %d, %d\n", fd[i][0], fd[i][1]);
-                close(fd[i][0]);
-                close(fd[i][1]);
+                out = STDOUT_FILENO;
             }
+            pid = fork();
+            if(pid == 0)
+            {
+                handle_program(j->programs[i], inp, out);
+            }
+            if(i != j->number_of_programs - 1)
+                inp = pipefd[0];
         }
-        while(rem);
-        for(i = 0; i < j->number_of_programs; ++i)
+        do
         {
-            free(fd[i]);
-            if(i > 0)
-                free(pipefd[i - 1]);
+            errno = 0;
         }
-        free(pids);
-        free(pipefd);
-        free(fd);
-        job_destroy(j);
-        destroy();
-        exit(0);
+        while(wait(&status) != -1 && errno != ECHILD);
+        inv_exit(1);
     }
     else
     {
         int status;
-        current_foreground = pid_job;
-        waitpid(pid_job, &status, 0);
-        signal(SIGCHLD, SIG_DFL);
-        current_foreground = -1;
-        job_destroy(j);
+        if(jobs_capacity == jobs_count)
+        {
+            jobs_capacity += expand_array((void**)&jobs, jobs_capacity, sizeof(job*));
+        }
+        jobs[jobs_count++] = j;
+        ++jobs_alive;
+        j->pid = pid;
+        if(!j->background)
+        {
+            make_fg(j, 0);
+        }
+        else
+        {
+            make_bg(j, 0);
+        }
     }
 }
 
-void ctrl_c_handler(int signum)
-{
-    if(current_foreground != -1)
-    {
-        kill(current_foreground, signum);
-    }
-    else
-    {
-        puts("");
-    }
-    signal(signum, ctrl_c_handler);
-}
 
 int main(int argc, char* argv[])
 {
     _argc = argc;
     _argv = argv;
     init();
-    signal(SIGINT, ctrl_c_handler);
     while(1)
     {
-        int err;
         job* j;
-        err = get_job(&j);
-        if(err)
+        if(get_job(&j) == E_UNEOLN)
         {
-            print_err(err, "Error getting job");
+            puts("");
+            inv_exit(0);
         }
         else
         {
-            if(j->background)
+            if(j->number_of_programs == 0)
             {
-                pid_t pid = fork();
-                if(pid == 0)
+                job_destroy(j);
+                continue;
+            }
+            if(j->number_of_programs == 1)
+            {
+                if(is_internal(j->programs[0]->name))
                 {
-                    close(0);
-                    close(1);
-                }
-                else
-                {
+                    handle_internal(j->programs[0], 0);
+                    job_destroy(j);
                     continue;
                 }
             }
             handle_job(j);
         }
     }
-    destroy();
+
+
+    inv_exit(1);
     return 0;
 }

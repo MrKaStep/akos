@@ -5,7 +5,7 @@ void invite_user()
     if(isatty(1))
     {
         set_color(GREEN);
-        fprintf(stdout, "%s@%s ", user->pw_name, hostname);
+        fprintf(stdout, "%s@%s ", getenv("USERNAME"), hostname);
         set_color(BLUE);
         print_path(0);
         printf(" *$ ");
@@ -60,6 +60,10 @@ int get_command()
             buf_size += add;
         }
         c = fgetc(stdin);
+        if(c == EOF && len == 0)
+        {
+            return E_UNEOLN;
+        }
         if(c == ';' || c == '\n' || c == EOF)
         {
             buf[len] = '\0';
@@ -144,21 +148,21 @@ int get_var(char** dest)
             return E_UNEOLN;
         if(cur - start == 4 && strncmp(start, "HOME", 4) == 0)
         {
-            *dest = calloc(strlen(home_dir) + 1, sizeof(char));
+            *dest = calloc(strlen(getenv("HOME")) + 1, sizeof(char));
             if(*dest == NULL)
             {
                 return E_MALLOC;
             }
-            strcpy(*dest, home_dir);
+            strcpy(*dest, getenv("HOME"));
         }
         else if(cur - start == 3 && strncmp(start, "PWD", 3) == 0)
         {
-            *dest = calloc(strlen(cur_path) + 1, sizeof(char));
+            *dest = calloc(strlen(getenv("PWD")) + 1, sizeof(char));
             if(*dest == NULL)
             {
                 return E_MALLOC;
             }
-            strcpy(*dest, cur_path);
+            strcpy(*dest, getenv("PWD"));
         }
         else if(cur - start == 3 && strncmp(start, "PID", 3) == 0)
         {
