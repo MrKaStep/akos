@@ -418,6 +418,7 @@ int get_job(job** _j)
     job* j;
     int prog_capacity = 1;
     int err;
+    update();
     if((err = get_command()))
     {
         return err;

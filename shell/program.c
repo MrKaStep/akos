@@ -13,6 +13,8 @@ void program_init(program* p)
 void program_destroy(program* p)
 {
     int i;
+    if(p == NULL)
+        return;
     if(p->arguments != NULL)
     {
         for(i = 0; i < p->number_of_arguments; ++i)

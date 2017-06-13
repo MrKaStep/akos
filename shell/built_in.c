@@ -30,9 +30,10 @@ int cd(program* p)
     }
     if(chdir(path) == -1)
     {
-        perror("Can't change directory");
+        perror("cd");
         return E_CHDIR;
     }
+    getwd(getenv("PWD"));
     return E_OK;
 }
 

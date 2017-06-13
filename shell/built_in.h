@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
+#include <stdlib.h>
 #include <limits.h>
 
 #include "errors.h"

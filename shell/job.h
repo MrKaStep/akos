@@ -27,6 +27,8 @@ typedef struct job_s job;
 
 void job_destroy(job* j);
 
+void print_job_call(job* j);
+
 void print_job(job* j);
 
 #endif /*JOB_H*/
